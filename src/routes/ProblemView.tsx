@@ -50,20 +50,38 @@ interface ProblemIDEProps {
 }
 
 function ProblemIDE({ problem }: ProblemIDEProps) {
-  const [code, setCode] = usePersistentProblemCode(problem);
-  const [hidePrompt, setHidePrompt] = useState(true);
-  const [question, setQuestion] = useState("");
-  const reflectionInput = useRef<HTMLElement>(null);
-  const [isTourOpen, setTourOpen] = useState(false);
-  const [problems, setProblems] = useState<Problem[]>([]);
+    const [code, setCode] = usePersistentProblemCode(problem);
+    const [hidePrompt, setHidePrompt] = useState(true);
+    const [question, setQuestion] = useState("");
+    const reflectionInput = useRef<HTMLElement>(null);
+    const [isTourOpen, setTourOpen] = useState(false);
+    const [problems, setProblems] = useState<Problem[]>([]);
+    const [problemElapsedSeconds, setProblemElapsedSeconds] = useState(0);
+    const [problemAlertStage, setProblemAlertStage] = useState<null | 'half' | 'twoThirds'>(null);
+    const problemTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const problemStartRef = useRef<number | null>(null);
 
-  const { session, setActiveProblem, refetchProgress } = useOutletContext<{
-    session: Session | null,
-    setActiveProblem: (name: string | null) => void,
-    refetchProgress: () => void
-  }>();
-  
-  const navigate = useNavigate();
+    const { 
+      session, 
+      setActiveProblem, 
+      refetchProgress,
+      activeSession,
+      sessionId,
+      sessionRemainingSeconds,
+      sessionDuration,
+      plannedExerciseCount
+    } = useOutletContext<{
+      session: Session | null,
+      setActiveProblem: (name: string | null) => void,
+      refetchProgress: () => void,
+      activeSession: boolean,
+      sessionId: string | null,
+      sessionRemainingSeconds: number,
+      sessionDuration: number,
+      plannedExerciseCount: number
+    }>();
+    
+    const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
@@ -136,7 +154,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         .select('code')
         .eq('profile_id', session.user.id)
         .eq('problem_title', problem.meta.name)
-        .order('submitted_at', { ascending: false})
+        .order('submitted_at', { ascending: false })
         .limit(1);
 
       const json = data?.[0] || null;
@@ -145,8 +163,8 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         console.warn('Could not load latest submission: ', error.message);
         return;
       }
-      
-      if (json){
+
+      if (json) {
         if (problem.meta.question_type[0] === 'mutation') {
           setCode(json.code);
         } else {
@@ -158,23 +176,54 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
           );
         }
       } else {
-        if(['coding','haystack'].includes(problem.meta.question_type[0])){
+        if (['coding', 'haystack'].includes(problem.meta.question_type[0])) {
           setCode(problem.starter || '');
         }
-        else{
+        else {
           setCode('');
         }
       }
-      hasFetchedProblems.current.add(problem.meta.name);
     }
-
     fetchLatestSubmission();
 
   }, [problem.meta.name, problem.meta.question_type, problem.starter, session, setCode]);
 
-  function changeCode(e: string | undefined) {
-    setCode(e ?? '')
-  }
+    // Problem timer - starts when problem loads
+    useEffect(() => {
+      problemStartRef.current = Date.now();
+      setProblemElapsedSeconds(0);
+      setProblemAlertStage(null);
+
+      problemTimerRef.current = setInterval(() => {
+        if (!problemStartRef.current) return;
+        const elapsed = Math.floor((Date.now() - problemStartRef.current) / 1000);
+        setProblemElapsedSeconds(elapsed);
+      }, 1000);
+
+      return () => {
+        if (problemTimerRef.current) clearInterval(problemTimerRef.current);
+      };
+    }, [problem.meta.name]);
+
+    // Alert user if taking too long on a problem
+    useEffect(() => {
+      if (!activeSession || plannedExerciseCount <= 0 || sessionDuration <= 0) return;
+
+      const sessionSeconds = sessionDuration * 60;
+      const perProblemTarget = Math.max(1, Math.floor(sessionSeconds / Math.max(1, plannedExerciseCount)));
+
+      if (problemElapsedSeconds >= perProblemTarget * (2/3) && problemAlertStage !== 'twoThirds') {
+        setProblemAlertStage('twoThirds');
+        console.warn(`You've been on this problem for ${Math.floor(problemElapsedSeconds / 60)} minutes. Consider using debugging tools or moving on.`);
+      } else if (problemElapsedSeconds >= perProblemTarget / 2 && problemAlertStage !== 'half') {
+        setProblemAlertStage('half');
+        console.log(`You've spent ${Math.floor(problemElapsedSeconds / 60)} minutes on this problem.`);
+      }
+    }, [problemElapsedSeconds, plannedExerciseCount, sessionDuration, activeSession, problemAlertStage]);
+
+    function changeCode(e: string | undefined) {
+      setCode(e ?? '')
+    }
 
 
   function handlePreviousProblem(){

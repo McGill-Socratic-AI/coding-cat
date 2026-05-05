@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Outlet, useLoaderData, useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Outlet, useLoaderData, useNavigate, useLocation } from 'react-router';
 import { Link } from 'react-router-dom';
 import { BLANK_CONTRACT, ContractData, ContractProgress, Problem, Submission } from '../types';
 import { supabase } from '../supabaseClient';
@@ -25,11 +25,18 @@ interface UserData{
 // The main thing that needs to be done is putting the `Drawer` component into its own separate file.
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<Session | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [activeSession, setActiveSession] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionDuration, setSessionDuration] = useState<number>(0);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [sessionRemainingSeconds, setSessionRemainingSeconds] = useState<number>(0);
+  const [plannedExerciseCount, setPlannedExerciseCount] = useState<number>(0);
+  const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isRecoverySession, setIsRecoverySession] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [activeSession, setActiveSession] = useState(false);
   const [open, setOpen] = useState(false);
   const [openCategory, setOpenCategory] = useState(false);
   const [activeProblem, setActiveProblem] = useState<null | string>(null);
@@ -166,6 +173,65 @@ export default function App() {
     fetchProgress();
   }, [fetchProgress]);
 
+  const startSession = (sessionIdFromState: string, durationMinutes: number, exerciseCount: number) => {
+    setSessionId(sessionIdFromState);
+    setSessionDuration(durationMinutes);
+    setPlannedExerciseCount(exerciseCount);
+    setSessionStartTime(new Date());
+    setSessionRemainingSeconds(durationMinutes * 60);
+    setActiveSession(true);
+  };
+
+  const endSession = () => {
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    setActiveSession(false);
+    setSessionId(null);
+    setSessionStartTime(null);
+    setSessionDuration(0);
+    setSessionRemainingSeconds(0);
+  };
+
+  // Handle session start when coming back from PreSessionForm
+  useEffect(() => {
+    const sessionIdFromState = (location.state as any)?.sessionId;
+    if (sessionIdFromState && session?.user) {
+      const fetchSessionData = async () => {
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('planned_duration_minutes, exercise_goals')
+          .eq('id', sessionIdFromState)
+          .eq('profile_id', session.user.id)
+          .single();
+
+        if (!error && data) {
+          startSession(sessionIdFromState, data.planned_duration_minutes, data.exercise_goals);
+        }
+      };
+      fetchSessionData();
+    }
+  }, [location.state, session?.user]);
+
+  // Session countdown timer
+  useEffect(() => {
+    if (!activeSession || !sessionStartTime) return;
+
+    sessionTimerRef.current = setInterval(() => {
+      const elapsed = Math.floor((new Date().getTime() - sessionStartTime.getTime()) / 1000);
+      const remaining = Math.max(0, sessionDuration * 60 - elapsed);
+      setSessionRemainingSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(sessionTimerRef.current!);
+        // Session ended - user should be prompted to post-session
+        // Don't navigate automatically, let them finish current problem
+      }
+    }, 1000);
+
+    return () => {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    };
+  }, [activeSession, sessionStartTime, sessionDuration]);
+
   return (
     <Box sx={{ display:'flex', height: "100%", flex: 1}}>
       <Stack
@@ -279,13 +345,14 @@ export default function App() {
                   <Button 
                     onClick={() => {
                       if (activeSession) {
-                        // TODO: Implement end session logic
-                        setActiveSession(false);
+                        endSession();
+                        navigate('/post-session', { state: { sessionId } });
                       } else {
                         navigate('/session');
                       }
                     }}
                     sx={{ backgroundColor: activeSession ? '#ffb5a9' : '#d4ff99' }}
+                    title={activeSession ? "Click to end session" : "Start a new session"}
                   >
                     {activeSession ? 'Ongoing Session' : 'Start Session'}
                   </Button>
@@ -335,17 +402,17 @@ export default function App() {
         </Stack>
         
         <Box width="100%" height="100%">
-          <Outlet 
-            context={
-              { 
-                setActiveProblem, 
-                session, 
-                isAdmin, 
-                refetchProgress: fetchProgress,
-                refetchProfile: fetchProfile 
-              }
-            }
-          />
+          <Outlet context={{ 
+            setActiveProblem, 
+            session, 
+            isAdmin, 
+            refetchProgress: fetchProgress,
+            activeSession,
+            sessionId,
+            sessionRemainingSeconds,
+            sessionDuration,
+            plannedExerciseCount
+          }} />
         </Box>
         
       </Stack>

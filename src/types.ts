@@ -146,3 +146,19 @@ export interface SessionReflection {
   form_data: FormAnswers;
   created_at: Date;
 }
+
+export interface ProblemLog {
+  problem_title: string;
+  session_id: string;
+  profile_id: string;
+  problem_category: string;
+  question_type: string;
+  attempt_count: number;
+  successful: boolean;
+  passed_tests: number;
+  total_tests: number;
+  time_spent_seconds: number;
+  first_attempt_at: string;
+  last_attempt_at: string;
+  code: unknown;
+}
