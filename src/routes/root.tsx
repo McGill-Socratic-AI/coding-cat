@@ -211,6 +211,13 @@ export default function App() {
     }
   }, [location.state, session?.user]);
 
+  // Handle session reset when coming back from PostSessionForm
+  useEffect(() => {
+    if (location.pathname === '/' && activeSession && (location.state as any)?.fromPostSession) {
+      endSession();
+    }
+  }, [location.pathname, location.state, activeSession]);
+
   // Session countdown timer
   useEffect(() => {
     if (!activeSession || !sessionStartTime) return;
@@ -345,7 +352,6 @@ export default function App() {
                   <Button 
                     onClick={() => {
                       if (activeSession) {
-                        endSession();
                         navigate('/post-session', { state: { sessionId } });
                       } else {
                         navigate('/session');

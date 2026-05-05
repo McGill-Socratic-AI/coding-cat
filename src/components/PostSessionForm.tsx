@@ -152,7 +152,11 @@ export default function PostSessionForm() {
       }
       console.log("Form answers submitted:", answers);
       setError(null);
-      navigate("/");
+      navigate("/", {
+        state: {
+          fromPostSession: true
+        }
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
