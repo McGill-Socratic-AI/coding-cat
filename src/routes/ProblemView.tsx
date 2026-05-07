@@ -58,6 +58,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     const [problems, setProblems] = useState<Problem[]>([]);
     const [problemElapsedSeconds, setProblemElapsedSeconds] = useState(0);
     const [problemAlertStage, setProblemAlertStage] = useState<null | 'half' | 'twoThirds'>(null);
+    const [hideExerciseTimer, setHideExerciseTimer] = useState(false);
     const problemTimerRef = useRef<NodeJS.Timeout | null>(null);
     const problemStartRef = useRef<number | null>(null);
 
@@ -214,9 +215,11 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
 
       if (problemElapsedSeconds >= perProblemTarget * (2/3) && problemAlertStage !== 'twoThirds') {
         setProblemAlertStage('twoThirds');
+        setHideExerciseTimer(false);
         console.warn(`You've been on this problem for ${Math.floor(problemElapsedSeconds / 60)} minutes. Consider using debugging tools or moving on.`);
       } else if (problemElapsedSeconds >= perProblemTarget / 2 && problemAlertStage !== 'half') {
         setProblemAlertStage('half');
+        setHideExerciseTimer(false);
         console.log(`You've spent ${Math.floor(problemElapsedSeconds / 60)} minutes on this problem.`);
       }
     }, [problemElapsedSeconds, plannedExerciseCount, sessionDuration, activeSession, problemAlertStage]);
@@ -284,7 +287,49 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
               </Markdown>
               {['coding','haystack'].includes(problem.meta.question_type[0]) ? <></> : <Tutorial tourState={isTourOpen} setTourState={setTourOpen}/>}
             </Box>
+
+            {activeSession && (
+              hideExerciseTimer ? (
+                <Box sx={{ width: '100%', display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    color="neutral"
+                    onClick={() => setHideExerciseTimer(false)}
+                    sx={{ borderRadius: '999px', textTransform: 'none' }}
+                  >
+                    Show exercise timer
+                  </Button>
+                </Box>
+              ) : (
+                <Box sx={{
+                  width: '100%',
+                  mt: 2,
+                  p: 1,
+                  borderRadius: '999px',
+                  background: 'linear-gradient(90deg, #ff9a9e 0%, #fad0c4 50%, #f9d976 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                }}>
+                  <Typography level="body-md" sx={{ fontWeight: 700, color: '#3f2d2d' }}>
+                    Exercise timer: {Math.floor(problemElapsedSeconds / 60)}:{(problemElapsedSeconds % 60).toString().padStart(2, '0')} elapsed
+                  </Typography>
+                  <Button
+                    size="sm"
+                    variant="plain"
+                    color="neutral"
+                    onClick={() => setHideExerciseTimer(true)}
+                    sx={{ minWidth: '24px', px: 0, color: '#3f2d2d' }}
+                  >
+                    ×
+                  </Button>
+                </Box>
+              )
+            )}
           </Box>
+
           { ['coding','haystack'].includes(problem.meta.question_type[0]) ?
             (
               <CodingQuestion code={code} changeCode={changeCode} problem={problem} runCode={runCode} />

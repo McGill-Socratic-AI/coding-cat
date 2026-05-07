@@ -124,7 +124,7 @@ export default function PreSessionForm() {
       setError("Error submitting session data. Please try again.");
       console.error("Supabase insert error:", error);
     } else {
-      navigate('/', { state: { sessionId: data.id } });
+      navigate('/', { state: { sessionId: data.id, fromPreSession: true } });
     }
   };
 

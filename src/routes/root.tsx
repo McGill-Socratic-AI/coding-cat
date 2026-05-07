@@ -191,25 +191,34 @@ export default function App() {
     setSessionRemainingSeconds(0);
   };
 
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
   // Handle session start when coming back from PreSessionForm
   useEffect(() => {
-    const sessionIdFromState = (location.state as any)?.sessionId;
-    if (sessionIdFromState && session?.user) {
-      const fetchSessionData = async () => {
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('planned_duration_minutes, exercise_goals')
-          .eq('id', sessionIdFromState)
-          .eq('profile_id', session.user.id)
-          .single();
+    const locationState = location.state as any;
+    const sessionIdFromState = locationState?.sessionId;
+    const fromPreSession = locationState?.fromPreSession;
 
-        if (!error && data) {
-          startSession(sessionIdFromState, data.planned_duration_minutes, data.exercise_goals);
-        }
-      };
-      fetchSessionData();
-    }
-  }, [location.state, session?.user]);
+    if (location.pathname !== '/' || !fromPreSession || !session?.user) return;
+
+    const fetchSessionData = async () => {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('planned_duration_minutes, exercise_goals')
+        .eq('id', sessionIdFromState)
+        .eq('profile_id', session.user.id)
+        .single();
+
+      if (!error && data) {
+        startSession(sessionIdFromState, data.planned_duration_minutes, data.exercise_goals);
+      }
+    };
+    fetchSessionData();
+  }, [location.pathname, location.state, session?.user, navigate]);
 
   // Handle session reset when coming back from PostSessionForm
   useEffect(() => {
@@ -337,7 +346,7 @@ export default function App() {
         sx={{
           width: '100%',
           minHeight: "100%",
-          height: "100%",
+          height: "100%", 
           justifyContent: "start",
           alignItems: "center",
           overflowY: "scroll"
@@ -349,18 +358,30 @@ export default function App() {
             <Box sx={{ margin: '10px 10px 0 10px', display: 'flex', gap: 1 }} className="account-btns">
               {session && !isRecoverySession ? (
                 <>
-                  <Button 
+                  <Button
                     onClick={() => {
                       if (activeSession) {
+                        endSession();
                         navigate('/post-session', { state: { sessionId } });
                       } else {
                         navigate('/session');
                       }
                     }}
-                    sx={{ backgroundColor: activeSession ? '#ffb5a9' : '#d4ff99' }}
+                    sx={{
+                      backgroundColor: activeSession ? '#d4ff99' : '#d4ff99',
+                      color: '#1a3e00',
+                      borderRadius: '999px',
+                      px: 2,
+                      py: 1,
+                      minWidth: '240px',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.08)',
+                      '&:hover': {
+                        backgroundColor: '#c7f68e',
+                      }
+                    }}
                     title={activeSession ? "Click to end session" : "Start a new session"}
                   >
-                    {activeSession ? 'Ongoing Session' : 'Start Session'}
+                    {activeSession ? `Ongoing session — ${formatTime(sessionRemainingSeconds)} left` : 'Start Session'}
                   </Button>
                   <Link to="/profile">
                     <Button>

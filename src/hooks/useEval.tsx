@@ -7,13 +7,7 @@ import { supabase } from '../supabaseClient';
 
 export type Eval = [EvalResponse | null, (code: string) => void];
 
-export default function useEval(
-  problem: Problem, 
-  session: Session | null, 
-  refetchProgress: () => void,
-  sessionId?: string | null,
-  problemStartRef?: React.MutableRefObject<number | null>
-): Eval {
+export default function useEval(problem: Problem, session: Session | null, refetchProgress: () => void): Eval {
     const [evalResponse, setEvalResponse] = useState<EvalResponse | null>(null)
     const currentCodeRef = useRef<string>('');
 
@@ -61,26 +55,16 @@ export default function useEval(
                     ? currentCodeRef.current
                     : { code: currentCodeRef.current }
     
-                // Calculate time spent on this problem
-                const timeSpentSeconds = problemStartRef?.current 
-                  ? Math.floor((Date.now() - problemStartRef.current) / 1000)
-                  : 0;
-
-                const isSuccessful = numPassed === totalTests;
-
                 // Submission payload
                 const submission = {
                     problem_title: problem.meta.name,
                     problem_category: problem.meta.category,
                     code: submissionPayload,
                     passed_tests: numPassed,
-                    total_tests: totalTests,
                     submitted_at: new Date().toISOString(),
                     profile_id: session.user.id,
-                    question_type: problem.meta.question_type[0],
-                    successful: isSuccessful,
-                    time_spent_seconds: timeSpentSeconds,
-                    ...(sessionId && { session_id: sessionId })
+                    total_tests: totalTests,
+                    question_type: problem.meta.question_type[0]
                 };
                 // Retrieve the most recent submission in the db
                 const { data, error } = await supabase
@@ -141,4 +125,3 @@ export default function useEval(
 
     return [evalResponse, runCode];
 }
-
