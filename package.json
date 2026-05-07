@@ -2,6 +2,7 @@
   "name": "coding-cat",
   "version": "0.1.0",
   "homepage": ".",
+  "type": "module",
   "private": true,
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

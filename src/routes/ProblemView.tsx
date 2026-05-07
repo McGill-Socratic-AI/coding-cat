@@ -184,6 +184,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
           setCode('');
         }
       }
+      hasFetchedProblems.current.add(problem.meta.name);
     }
     fetchLatestSubmission();
 

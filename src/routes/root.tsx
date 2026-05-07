@@ -434,6 +434,7 @@ export default function App() {
             session, 
             isAdmin, 
             refetchProgress: fetchProgress,
+            refetchProfile: fetchProfile,
             activeSession,
             sessionId,
             sessionRemainingSeconds,
