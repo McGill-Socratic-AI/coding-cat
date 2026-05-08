@@ -1,11 +1,12 @@
 import { handleOptions, corsHeaders } from "./cors.ts";
-import { clientFromAuthHeader, getUserId } from "./auth.ts";
+import { clientFromAuthHeader, getUserId, makeServiceClient } from "./auth.ts";
 import { isFlagOn } from "./flag.ts";
 import { checkLimits } from "./rate_limit.ts";
 import type { AnalyzeError } from "./types.ts";
 import type { AnalyzeRequest } from "./types.ts";
 import { buildPrompt } from "./prompt.ts";
 import { makeAnthropic, callLLM } from "./llm.ts";
+import { logAndRecomputeUsage } from "./log.ts";
 
 function jsonError(
   kind: AnalyzeError["kind"],
@@ -80,9 +81,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("upstream", "Analysis service is temporarily unavailable", 502);
   }
 
-  // Placeholder usage; Task 6 will recompute post-insert.
+  // Log + recompute usage. Uses a service-role client because RLS has no
+  // INSERT policy on analyze_calls (by design — see auth.ts).
+  const serviceClient = makeServiceClient();
+  const fresh = await logAndRecomputeUsage(serviceClient, {
+    userId,
+    problemName,
+    code: reqBody.code,
+    response: analysis,
+    model: "claude-haiku-4-5",
+    latencyMs: Math.round(latencyMs),
+  }, limits.usage);
+
   return new Response(
-    JSON.stringify({ ok: true, analysis, usage: limits.usage }),
+    JSON.stringify({ ok: true, analysis, usage: fresh }),
     { status: 200, headers: { ...corsHeaders(), "Content-Type": "application/json" } },
   );
 });
