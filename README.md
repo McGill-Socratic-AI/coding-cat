@@ -65,4 +65,43 @@ A bare, front-end only version of this application was developed by Eric Mayhew 
 During the school year, dozens of students in Eric's introduction to Python course at Dawson added dozens of problems to the problem set. Thank you to these students for enhancing the application.
 
 ### Spring 2025 
-During April to May of 2025, 3 student interns (Emmanuelle Lin, Ahmed Sobh, and Kristian Garkov) implemented a number of key features that make Coding Cat what it is today, such as: a backend with persistent user accounts, the ability for users to set individualized goals for number of problems completed, new problem types (like mutation testing problems), and reflections.  Thank you to these students for implementing these key features. 
+During April to May of 2025, 3 student interns (Emmanuelle Lin, Ahmed Sobh, and Kristian Garkov) implemented a number of key features that make Coding Cat what it is today, such as: a backend with persistent user accounts, the ability for users to set individualized goals for number of problems completed, new problem types (like mutation testing problems), and reflections.  Thank you to these students for implementing these key features.
+
+## Edge Functions
+
+Edge Functions live under `supabase/functions/<name>/` and run on Supabase's Deno runtime. The CLI is required for local dev and deployment:
+
+```bash
+brew install supabase
+brew install deno   # for local function tests
+```
+
+One-time setup (per developer):
+
+```bash
+supabase login                                # interactive (browser)
+supabase link --project-ref <prod_or_staging> # interactive (db password)
+supabase secrets set ANTHROPIC_API_KEY=sk-... # function secret
+```
+
+Local dev (runs the function on `http://localhost:54321/functions/v1/<name>`):
+
+```bash
+supabase functions serve <name> --env-file ./supabase/functions/.env.local
+```
+
+Deploy:
+
+```bash
+npm run deploy:functions          # deploys all functions in supabase/functions/
+supabase functions deploy <name>  # deploy a single function
+```
+
+Per-function unit tests use Deno's built-in runner:
+
+```bash
+cd supabase/functions/<name>
+deno test --allow-env --allow-net
+```
+
+The `analyze` function (AI Analysis feature) requires `ANTHROPIC_API_KEY` and is gated by the `AIAnalysis` row in the existing `activated` table — defaults OFF. 
