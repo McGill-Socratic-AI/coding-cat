@@ -4,6 +4,8 @@ import { isFlagOn } from "./flag.ts";
 import { checkLimits } from "./rate_limit.ts";
 import type { AnalyzeError } from "./types.ts";
 import type { AnalyzeRequest } from "./types.ts";
+import { buildPrompt } from "./prompt.ts";
+import { makeAnthropic, callLLM } from "./llm.ts";
 
 function jsonError(
   kind: AnalyzeError["kind"],
@@ -64,13 +66,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  // Placeholder until Task 5-7 wire LLM call and real usage.
+  // Build prompt and call LLM
+  const promptParams = buildPrompt(reqBody);
+  let analysis: string;
+  let latencyMs: number;
+  try {
+    const anthropic = makeAnthropic();
+    const result = await callLLM(anthropic, "claude-haiku-4-5", promptParams);
+    analysis = result.text;
+    latencyMs = result.latencyMs;
+  } catch (e) {
+    console.error("LLM upstream error:", e);
+    return jsonError("upstream", "Analysis service is temporarily unavailable", 502);
+  }
+
+  // Placeholder usage; Task 6 will recompute post-insert.
   return new Response(
-    JSON.stringify({
-      ok: true,
-      analysis: "rate-limit-passed placeholder",
-      usage: limits.usage,
-    }),
+    JSON.stringify({ ok: true, analysis, usage: limits.usage }),
     { status: 200, headers: { ...corsHeaders(), "Content-Type": "application/json" } },
   );
 });
