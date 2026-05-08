@@ -43,28 +43,36 @@ export async function checkLimits(
 ): Promise<LimitResult> {
   const todayStart = todayUtcStartISO();
 
-  const { count: dailyCount = 0 } = await client
+  const { count: dailyCount, error: dailyError } = await client
     .from("analyze_calls")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .gte("created_at", todayStart);
 
-  const { count: problemCount = 0 } = await client
+  if (dailyError) {
+    console.error("[rate_limit] daily count query failed (failing open):", dailyError);
+  }
+
+  const { count: problemCount, error: problemError } = await client
     .from("analyze_calls")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("problem_name", problemName)
     .gte("created_at", todayStart);
 
+  if (problemError) {
+    console.error("[rate_limit] per-problem count query failed (failing open):", problemError);
+  }
+
   const usage: Usage = {
     dailyUsed: dailyCount ?? 0,
     problemUsed: problemCount ?? 0,
   };
 
-  if ((dailyCount ?? 0) >= DAILY_CAP) {
+  if (usage.dailyUsed >= DAILY_CAP) {
     return { allowed: false, kind: "daily", usage, retryAt: nextUtcMidnightISO() };
   }
-  if ((problemCount ?? 0) >= PROBLEM_CAP) {
+  if (usage.problemUsed >= PROBLEM_CAP) {
     return { allowed: false, kind: "problem", usage, retryAt: nextUtcMidnightISO() };
   }
   return { allowed: true, usage };

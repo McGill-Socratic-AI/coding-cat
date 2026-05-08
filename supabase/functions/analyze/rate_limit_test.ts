@@ -62,3 +62,28 @@ Deno.test("nextUtcMidnightISO returns next-day midnight ISO", () => {
   const next = nextUtcMidnightISO(now);
   assertEquals(next, "2026-05-09T00:00:00.000Z");
 });
+
+Deno.test("checkLimits fails open when DB returns error", async () => {
+  const client = {
+    from(_: string) {
+      return {
+        select(_col: string, _opts?: any) {
+          return {
+            eq: (_c: string, _v: any) => ({
+              eq: (_c2: string, _v2: any) => ({
+                gte: (_c3: string, _v3: any) =>
+                  Promise.resolve({ count: null, error: { message: "boom" }, data: null }),
+              }),
+              gte: (_c2: string, _v2: any) =>
+                Promise.resolve({ count: null, error: { message: "boom" }, data: null }),
+            }),
+          };
+        },
+      };
+    },
+  };
+  const result = await checkLimits(client as any, "user-x", "problem-y");
+  assertEquals(result.allowed, true);
+  assertEquals(result.usage.dailyUsed, 0);
+  assertEquals(result.usage.problemUsed, 0);
+});
