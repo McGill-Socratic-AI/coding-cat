@@ -54,6 +54,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("invalid_input", "meta.name is required", 400);
   }
 
+  // Server-side mutation reject (defense-in-depth; the FE gate is best-effort)
+  const questionType = reqBody?.meta?.question_type?.[0];
+  if (questionType === "mutation") {
+    return jsonError(
+      "invalid_input",
+      "Mutation problems are not supported by AI Analysis",
+      400,
+    );
+  }
+
   // Rate limits
   const limits = await checkLimits(client, userId, problemName);
   if (!limits.allowed) {
