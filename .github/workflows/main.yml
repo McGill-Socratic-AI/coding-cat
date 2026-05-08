@@ -1,10 +1,10 @@
 name: Test, build & deploy the Coding Cat app
 on:
   push:
-    branches: [main]
-  
+    branches: [main, dev]
+
   pull_request:
-    branches: [main, staging]
+    branches: [main, staging, dev]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -39,6 +39,9 @@ jobs:
           path: build/
   deploy:
     name: Deploy to GitHub Pages
+    # Only deploy when something is pushed (or merged) into main.
+    # Skips PRs and pushes to dev / staging — they should run test + build only.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
