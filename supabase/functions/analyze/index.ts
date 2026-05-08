@@ -1,7 +1,9 @@
 import { handleOptions, corsHeaders } from "./cors.ts";
 import { clientFromAuthHeader, getUserId } from "./auth.ts";
 import { isFlagOn } from "./flag.ts";
+import { checkLimits } from "./rate_limit.ts";
 import type { AnalyzeError } from "./types.ts";
+import type { AnalyzeRequest } from "./types.ts";
 
 function jsonError(
   kind: AnalyzeError["kind"],
@@ -35,9 +37,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("flag_off", "AI Analysis is currently disabled", 403);
   }
 
-  // Placeholder until Tasks 4-7 wire body parsing, LLM call, and real usage.
+  // Parse the body
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError("invalid_input", "Invalid JSON body", 400);
+  }
+  // Minimal shape check; full validation will harden later
+  const reqBody = body as AnalyzeRequest;
+  const problemName = reqBody?.meta?.name;
+  if (!problemName) {
+    return jsonError("invalid_input", "meta.name is required", 400);
+  }
+
+  // Rate limits
+  const limits = await checkLimits(client, userId, problemName);
+  if (!limits.allowed) {
+    return jsonError(
+      "rate_limit",
+      limits.kind === "daily"
+        ? "Daily analysis limit reached"
+        : "Per-problem analysis limit reached for today",
+      429,
+      { retryAt: limits.retryAt, usage: limits.usage },
+    );
+  }
+
+  // Placeholder until Task 5-7 wire LLM call and real usage.
   return new Response(
-    JSON.stringify({ ok: true, analysis: "skeleton placeholder", usage: { dailyUsed: 0, problemUsed: 0 } }),
+    JSON.stringify({
+      ok: true,
+      analysis: "rate-limit-passed placeholder",
+      usage: limits.usage,
+    }),
     { status: 200, headers: { ...corsHeaders(), "Content-Type": "application/json" } },
   );
 });
