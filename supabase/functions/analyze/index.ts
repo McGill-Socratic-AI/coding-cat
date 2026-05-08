@@ -35,7 +35,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonError("flag_off", "AI Analysis is currently disabled", 403);
   }
 
-  // Placeholder until Tasks 4-7 land.
+  // Placeholder until Tasks 4-7 wire body parsing, LLM call, and real usage.
   return new Response(
     JSON.stringify({ ok: true, analysis: "skeleton placeholder", usage: { dailyUsed: 0, problemUsed: 0 } }),
     { status: 200, headers: { ...corsHeaders(), "Content-Type": "application/json" } },

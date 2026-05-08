@@ -6,7 +6,7 @@ export function clientFromAuthHeader(authHeader: string | null): SupabaseClient 
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
     {
-      global: { headers: { Authorization: authHeader ?? "" } },
+      global: authHeader ? { headers: { Authorization: authHeader } } : {},
       auth: { persistSession: false, autoRefreshToken: false },
     },
   );

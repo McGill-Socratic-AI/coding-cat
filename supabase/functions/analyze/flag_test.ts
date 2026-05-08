@@ -34,3 +34,23 @@ Deno.test("isFlagOn returns false when row missing", async () => {
   const c = fakeClient([]);
   assertEquals(await isFlagOn(c as any, "AIAnalysis"), false);
 });
+
+Deno.test("isFlagOn returns false on DB error", async () => {
+  const c = {
+    from(_: string) {
+      return {
+        select(_: string) {
+          return {
+            eq: (_col: string, _val: string) => ({
+              maybeSingle: async () => ({
+                data: null,
+                error: { message: "boom" },
+              }),
+            }),
+          };
+        },
+      };
+    },
+  };
+  assertEquals(await isFlagOn(c as any, "AIAnalysis"), false);
+});

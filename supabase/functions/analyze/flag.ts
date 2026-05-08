@@ -9,6 +9,9 @@ export async function isFlagOn(
     .select("activated")
     .eq("topic", topic)
     .maybeSingle();
-  if (error) return false;
+  if (error) {
+    console.error("[flag] isFlagOn DB error:", error);
+    return false;
+  }
   return data?.activated === true;
 }
