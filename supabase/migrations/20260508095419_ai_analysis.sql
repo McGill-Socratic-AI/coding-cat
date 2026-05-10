@@ -1,5 +1,10 @@
 -- AI Analysis feature (v1)
 -- Adds the analyze_calls log/rate-limit table and the AIAnalysis feature flag row.
+--
+-- TODO (post-v1): analyze_calls grows unboundedly. Add a scheduled cleanup
+-- (e.g., supabase pg_cron) deleting rows older than 90 days once telemetry
+-- shows real growth. Free-tier database storage (500 MB) is the limiting
+-- factor; each row is ~1-10 KB depending on code length.
 
 CREATE TABLE analyze_calls (
   id            BIGSERIAL PRIMARY KEY,
