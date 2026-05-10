@@ -20,11 +20,11 @@ export type EvalResponse
 
 export interface ProblemMeta {
     name: string;
-        title: string;
-        difficulty: string;
-        author: string;
-        category: string;
-        question_type: Array<string>;
+    title: string;
+    difficulty: string;
+    author: string;
+    category: string;
+    question_type: Array<string>;
 }
 
 export interface Problem {
