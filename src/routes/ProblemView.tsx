@@ -208,7 +208,15 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     io: problem.io,
     starter: problem.starter ?? '',
     code,
-    testReport: evalResponse?.status === 'success' ? evalResponse.report : [],
+    testReport:  evalResponse?.status === 'success'
+    ? Array.from(evalResponse.report, (r: any) => ({
+        input: r.input,
+        expected: r.expected,
+        actual: r.actual,
+        equal: r.equal,
+        error: null, // JSON.stringify did not convert the error type properly. Anyway, for this version AI analysis is only called on non-erroneous code.
+      }))
+    : [],
     }); 
 
     return (
