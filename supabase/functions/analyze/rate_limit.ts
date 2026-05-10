@@ -36,6 +36,19 @@ function todayUtcStartISO(): string {
   )).toISOString();
 }
 
+// Note on TOCTOU: checkLimits reads counts and returns; the actual log
+// insert happens after the LLM call (see logAndRecomputeUsage). Two
+// requests from the same user landing simultaneously can both pass at
+// dailyUsed = cap-1 and end at cap+1. This is a soft cap by design;
+// the worst case is +1 over the budget per concurrent burst. If a hard
+// cap is ever needed, move to a SQL transaction with conditional INSERT.
+//
+// Note on fail-open: when Supabase returns an error on either count
+// query, we log it and treat the count as 0. This is asymmetric with
+// flag.ts (which fail-closes). The choice is deliberate: rate limits
+// guard cost (a transient DB hiccup shouldn't cause a user-visible 429),
+// while the feature flag is the master kill-switch (DB error must not
+// accidentally enable a disabled feature).
 export async function checkLimits(
   client: SupabaseClient,
   userId: string,

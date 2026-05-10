@@ -2,11 +2,20 @@ import { handleOptions, corsHeaders } from "./cors.ts";
 import { clientFromAuthHeader, getUserId, makeServiceClient } from "./auth.ts";
 import { isFlagOn } from "./flag.ts";
 import { checkLimits } from "./rate_limit.ts";
-import type { AnalyzeError } from "./types.ts";
-import type { AnalyzeRequest } from "./types.ts";
+import type { AnalyzeError, AnalyzeRequest } from "./types.ts";
 import { buildPrompt } from "./prompt.ts";
 import { makeAnthropic, callLLM } from "./llm.ts";
 import { logAndRecomputeUsage } from "./log.ts";
+
+// Model alias — auto-tracks the latest Haiku 4.5 snapshot. Pin to a
+// specific snapshot (e.g., claude-haiku-4-5-20251001) when behavior
+// stability becomes more important than auto-fixes.
+const MODEL = "claude-haiku-4-5";
+
+// Length caps — defense against authenticated users sending oversized
+// payloads (storage + Anthropic token cost).
+const MAX_CODE_LEN = 50_000;
+const MAX_PROBLEM_NAME_LEN = 200;
 
 function jsonError(
   kind: AnalyzeError["kind"],
@@ -47,11 +56,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
   } catch {
     return jsonError("invalid_input", "Invalid JSON body", 400);
   }
-  // Minimal shape check; full validation will harden later
   const reqBody = body as AnalyzeRequest;
+
+  // Validate body shape — buildPrompt and downstream code assume these
+  // fields exist with the right types. Without these checks, malformed
+  // bodies cause an unhandled TypeError → 500 + stack trace leak.
   const problemName = reqBody?.meta?.name;
-  if (!problemName) {
+  if (typeof problemName !== "string" || problemName.length === 0) {
     return jsonError("invalid_input", "meta.name is required", 400);
+  }
+  if (problemName.length > MAX_PROBLEM_NAME_LEN) {
+    return jsonError(
+      "invalid_input",
+      `meta.name exceeds ${MAX_PROBLEM_NAME_LEN} character limit`,
+      400,
+    );
+  }
+  if (typeof reqBody.meta?.title !== "string") {
+    return jsonError("invalid_input", "meta.title (string) is required", 400);
+  }
+  if (typeof reqBody.description !== "string") {
+    return jsonError("invalid_input", "description (string) is required", 400);
+  }
+  if (typeof reqBody.starter !== "string") {
+    return jsonError("invalid_input", "starter (string) is required", 400);
+  }
+  if (typeof reqBody.code !== "string") {
+    return jsonError("invalid_input", "code (string) is required", 400);
+  }
+  if (reqBody.code.length > MAX_CODE_LEN) {
+    return jsonError(
+      "invalid_input",
+      `code exceeds ${MAX_CODE_LEN} character limit`,
+      400,
+    );
+  }
+  if (!Array.isArray(reqBody.testReport)) {
+    return jsonError("invalid_input", "testReport (array) is required", 400);
   }
 
   // Server-side mutation reject (defense-in-depth; the FE gate is best-effort)
@@ -83,7 +124,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   let latencyMs: number;
   try {
     const anthropic = makeAnthropic();
-    const result = await callLLM(anthropic, "claude-haiku-4-5", promptParams);
+    const result = await callLLM(anthropic, MODEL, promptParams);
     analysis = result.text;
     latencyMs = result.latencyMs;
   } catch (e) {
@@ -99,7 +140,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     problemName,
     code: reqBody.code,
     response: analysis,
-    model: "claude-haiku-4-5",
+    model: MODEL,
     latencyMs: Math.round(latencyMs),
   }, limits.usage);
 

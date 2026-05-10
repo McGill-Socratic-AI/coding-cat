@@ -1,5 +1,16 @@
-// IMPORTANT: this file is a deliberate duplicate of src/types.ts on the FE.
-// CRA + Deno cannot share a file. Keep these in sync manually.
+// IMPORTANT: This file straddles two roles. CRA + Deno cannot share a file,
+// so we duplicate types deliberately.
+//
+//   FE-mirroring half (must stay in sync with src/types.ts on the FE):
+//     - ProblemMeta, IOPair, Report
+//
+//   Analyze-specific half (single source of truth — copy into FE if needed):
+//     - AnalyzeRequest, AnalyzeSuccess, AnalyzeError, AnalyzeResponse,
+//       AnalyzeKind, Usage
+//
+// Note: Report.error?: string | null is added here for future-proofing
+// (worker.py emits it). The FE Report shape may not have it yet — that
+// is intentional and resolved when F1 (issue #14) lands on the FE side.
 
 export interface ProblemMeta {
   name: string;

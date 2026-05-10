@@ -1,5 +1,22 @@
 -- =============================================================================
 -- Seed: existing schema for coding-cat
+--
+-- ⚠️  FOR FRESH PROJECTS ONLY.
+--
+-- Do NOT apply this migration to a Supabase project that already has the
+-- `activated`, `profiles`, `submissions`, or `contracts` tables — the
+-- CREATE TABLE statements are unguarded and will fail with
+-- "relation already exists", aborting the migration batch.  This will
+-- block the subsequent ai_analysis migration from applying as well.
+--
+-- Intended use: spinning up a developer's own staging Supabase project
+-- without needing access to the production schema.  On the production
+-- project (which already has these tables), pre-mark this migration as
+-- applied so `supabase db push` skips it:
+--
+--     INSERT INTO supabase_migrations.schema_migrations (version)
+--       VALUES ('00000000000000');
+--
 -- Timestamp 00000000000000 sorts BEFORE all other migrations (including
 -- 20260508095419_ai_analysis.sql which INSERT-references activated).
 --
@@ -40,15 +57,16 @@ ALTER TABLE activated ENABLE ROW LEVEL SECURITY;
 CREATE POLICY activated_read_all ON activated
     FOR SELECT USING (true);   -- public/anonymous read is fine; flags are not sensitive
 
--- Only admins should write; admin check is done in application code via
--- profiles.is_admin.  We restrict DB-level writes to the service role to be
--- safe.  Flag for human review: if you want admin users to flip flags from the
--- UI without a service-role key, change this to:
---   USING (EXISTS (SELECT 1 FROM profiles WHERE profile_id = auth.uid() AND is_admin = true))
+-- Admin writes go through the user-bound (anon-key) client from AdminPage.tsx,
+-- so the policy must allow writes when profiles.is_admin = true for the
+-- caller.  Anyone non-admin still gets blocked by RLS.
 CREATE POLICY activated_admin_write ON activated
-    FOR ALL USING (false);     -- no anon/auth writes; AdminPage uses service-role key
-                               -- VERIFY: if AdminPage uses the anon key you need a
-                               --         permissive write policy for is_admin users.
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profile_id = auth.uid() AND is_admin = true
+        )
+    );                         -- AdminPage.tsx (anon-key client) needs this to flip flags.
 
 
 -- ---------------------------------------------------------------------------
