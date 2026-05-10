@@ -37,6 +37,7 @@
     "test": "react-scripts test",
     "deploy": "rsync -r build/ codingcat@jerrington.me:/srv/http/coding-cat/",
     "deploy-exam": "rsync -r build/ codingcat@jerrington.me:/srv/http/exam-coding-cat/",
+    "deploy:functions": "supabase functions deploy",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
