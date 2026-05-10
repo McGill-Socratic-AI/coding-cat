@@ -64,6 +64,8 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
 
     const { session } = useOutletContext<{ session: Session | null }>();
     const { setActiveProblem } = useOutletContext<ProblemIDEOutletContext>();
+    const {featureMap} = useOutletContext<{featureMap: Record<string, boolean>}>();
+    
     
     const navigate = useNavigate();
 
@@ -214,7 +216,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         expected: r.expected,
         actual: r.actual,
         equal: r.equal,
-        error: null, // JSON.stringify did not convert the error type properly. Anyway, for this version AI analysis is only called on non-erroneous code.
+        error: r.error.message, 
       }))
     : [],
     }); 
@@ -270,7 +272,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
             ['coding','haystack'].includes(problem.meta.question_type[0]) ? (
               <Box flex={1} width="100%" display = "flex" flexDirection="column" gap={2}>
                 {evalResponse ? (<Report evalResponse={evalResponse} questionType={problem.meta.question_type[0]} /> ) : <Box></Box>}
-                <Box sx={{ border: 2, borderRadius: 10}} >
+                {featureMap['AIAnalysis'] === true && <Box sx={{ border: 2, borderRadius: 10}} >
                   <Stack direction="column">
                     <Typography sx={{ p: 2, borderBottom: 2,}} level="h4"> AI Analysis </Typography>
                     {evalResponse ? (<AIReport state={state} onAnalyze={onAnalyze} evalResponse={evalResponse} /> ) : 
@@ -278,7 +280,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
                           <Typography> Run your code to generate an AI analysis. </Typography>
                     </Stack>}
                   </Stack>
-                </Box>
+                </Box>}
               </Box>
             ) : 
             (

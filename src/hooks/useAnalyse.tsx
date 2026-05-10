@@ -14,7 +14,7 @@ export default function useAnalyze() {
     setState({ status: 'loading' });
     if (process.env.REACT_APP_USE_MOCK_ANALYZE === 'true') {
       await new Promise(r => setTimeout(r, 800));
-      console.log(body.testReport);     
+      // console.log(body.testReport);     
       setState({ status: 'success', analysis: `
 ...mock markdown...
         
@@ -32,7 +32,7 @@ export default function useAnalyze() {
     }
     const { data, error } = await supabase.functions.invoke<AnalyzeResponse>('analyze', { body });
     if (error) {
-      setState({status:'error', kind:'upstream', message:'The analysis service did not return a response... ' + error})
+      setState({status:'error', kind:'upstream', message:'The analysis service did not return a response... ' + error.message})
       console.error(error);
     return;
     }
