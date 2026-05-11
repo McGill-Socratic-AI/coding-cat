@@ -216,7 +216,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         expected: r.expected,
         actual: r.actual,
         equal: r.equal,
-        error: r.error.message, 
+        error: r.error?.ob_type?.tp_name === "NoneType"? null: r.error,
       }))
     : [],
     }); 

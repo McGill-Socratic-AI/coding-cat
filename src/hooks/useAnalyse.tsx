@@ -14,7 +14,7 @@ export default function useAnalyze() {
     setState({ status: 'loading' });
     if (process.env.REACT_APP_USE_MOCK_ANALYZE === 'true') {
       await new Promise(r => setTimeout(r, 800));
-      // console.log(body.testReport);     
+      // console.log(body.testReport); console.log(JSON.stringify(body.testReport)); 
       setState({ status: 'success', analysis: `
 ...mock markdown...
         
