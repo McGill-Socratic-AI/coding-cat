@@ -4,7 +4,7 @@ import { corsHeaders, handleOptions } from "./cors.ts";
 Deno.test("corsHeaders includes required CORS keys", () => {
   const h = corsHeaders();
   assertEquals(h["Access-Control-Allow-Origin"], "*");
-  assertEquals(h["Access-Control-Allow-Headers"], "authorization, content-type");
+  assertEquals(h["Access-Control-Allow-Headers"], "authorization, content-type, apikey, x-client-info");
   assertEquals(h["Access-Control-Allow-Methods"], "POST, OPTIONS");
 });
 
