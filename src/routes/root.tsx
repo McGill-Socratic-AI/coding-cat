@@ -18,7 +18,7 @@ import getProblemSet from '../utils/getProblemSet';
 // The main thing that needs to be done is putting the `Drawer` component into its own separate file.
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false || process.env.REACT_APP_USE_MOCK_SESSION === 'true');
   const [open, setOpen] = useState(false);
   const [openCategory, setOpenCategory] = useState(false);
   const [activeProblem, setActiveProblem] = useState<null | string>(null);
@@ -29,6 +29,7 @@ export default function App() {
   const [searchedProblems, setSearchedProblems] = useState<Problem[]>([]);
   const [selectedTab, setSelectedTab] = useState("");
   const [contract, setContract] = useState<ContractData>(BLANK_CONTRACT);
+  const [featureMap, setFeatureMap] = useState<Record<string, boolean>>({'AIAnalysis': process.env.REACT_APP_USE_MOCK_SESSION === 'true'});
   
   const contractProgress: ContractProgress = contract.Coding.problemsToSolveByCategory;
   contractProgress["mutation"] = contract.Mutation.problemsToSolve;
@@ -77,7 +78,7 @@ export default function App() {
               }
             });
         }
-      }
+      }  
     });
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -93,9 +94,20 @@ export default function App() {
             }
           });
       } else {
-        setIsAdmin(false);
+        setIsAdmin(false || process.env.REACT_APP_USE_MOCK_SESSION === 'true');
       }
     });
+
+    async function load() {
+      try {
+        const { data } = await supabase.from('activated').select('topic, activated');
+        if (data) setFeatureMap(Object.fromEntries((data ?? []).map(r => [r.topic, r.activated])));
+      } catch (err) {
+        console.error('Failed to fetch activated flags', err);
+        setFeatureMap({});
+        if (process.env.REACT_APP_USE_MOCK_SESSION === 'true') setFeatureMap({'AIAnalysis': true});
+      }
+    } load(); 
   }, []);
 
   useEffect(() => {
@@ -239,7 +251,7 @@ export default function App() {
         </Stack>
         
         <Box width="100%" height="100%">
-          <Outlet context={{ setActiveProblem, session, isAdmin }} />
+          <Outlet context={{ setActiveProblem, session, isAdmin, featureMap }} />
         </Box>
         
       </Stack>

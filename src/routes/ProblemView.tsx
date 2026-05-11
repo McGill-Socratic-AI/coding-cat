@@ -5,6 +5,7 @@ import Markdown from 'markdown-to-jsx';
 import { Problem, EvalResponse } from '../types';
 import useEval from '../hooks/useEval';
 import usePersistentProblemCode from '../hooks/usePersistentProblemCode';
+import useAnalyze from '../hooks/useAnalyse';
 
 import { Stack, Sheet, Box, Typography, Table, Button } from '@mui/joy';
 
@@ -20,6 +21,8 @@ import getProblemSet from '../utils/getProblemSet';
 import cursedCat from '../assets/cUrSed.png';
 import SolutionCode from '../components/SolutionCode';
 import { getColumnStatuses } from '../utils/mapMutantResults';
+import AnalysisPanel from '../components/AnalysisPanel';
+import {Usage, AnalyzeError} from '../types'
 
 // Emoji rendered in the report
 const TEST_CASE_PASSED = '✅';
@@ -61,6 +64,8 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
 
     const { session } = useOutletContext<{ session: Session | null }>();
     const { setActiveProblem } = useOutletContext<ProblemIDEOutletContext>();
+    const {featureMap} = useOutletContext<{featureMap: Record<string, boolean>}>();
+    
     
     const navigate = useNavigate();
 
@@ -198,6 +203,24 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     ? getColumnStatuses(evalResponse)
     : undefined;
 
+    const {state, run} = useAnalyze();
+    const onAnalyze = () => run({
+    meta: problem.meta,
+    description: problem.description,
+    io: problem.io,
+    starter: problem.starter ?? '',
+    code,
+    testReport:  evalResponse?.status === 'success'
+    ? Array.from(evalResponse.report, (r: any) => ({
+        input: r.input,
+        expected: r.expected,
+        actual: r.actual,
+        equal: r.equal,
+        error: r.error?.ob_type?.tp_name === "NoneType"? null: r.error,
+      }))
+    : [],
+    }); 
+
     return (
       <Stack sx={{ width: "100%", p: 3 }} className="problem-container" direction="row" spacing={2}  justifyContent="center">
         <Stack sx={{ flex: 4, width: "100%", height: "100%", display: "flex"}} direction="column" spacing={2} alignItems="center">
@@ -247,8 +270,17 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         <Stack height="100%" width="100%" flex={2} alignItems="flex-start" className="results-container" gap={3}>
           { 
             ['coding','haystack'].includes(problem.meta.question_type[0]) ? (
-              <Box flex={1} width="100%">
-                {evalResponse ? <Report evalResponse={evalResponse} questionType={problem.meta.question_type[0]} /> : <Box></Box>}
+              <Box flex={1} width="100%" display = "flex" flexDirection="column" gap={2}>
+                {evalResponse ? (<Report evalResponse={evalResponse} questionType={problem.meta.question_type[0]} /> ) : <Box></Box>}
+                {featureMap['AIAnalysis'] === true && <Box sx={{ border: 2, borderRadius: 10}} >
+                  <Stack direction="column">
+                    <Typography sx={{ p: 2, borderBottom: 2,}} level="h4"> AI Analysis </Typography>
+                    {evalResponse ? (<AIReport state={state} onAnalyze={onAnalyze} evalResponse={evalResponse} /> ) : 
+                    <Stack direction="column" alignItems="center" justifyContent="center" spacing={1} sx={{ py: 5, px: 3, minHeight: 40,}}>
+                          <Typography> Run your code to generate an AI analysis. </Typography>
+                    </Stack>}
+                  </Stack>
+                </Box>}
               </Box>
             ) : 
             (
@@ -365,3 +397,27 @@ function Report({ evalResponse, questionType }: ReportProps) {
 
   return <p> If this text appears, it&apos;s a bug :^) </p>;
 };
+
+type State =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; analysis: string; usage: Usage }
+  | { status: 'error'; kind: AnalyzeError['kind']; message: string; retryAt?: string; usage?: Usage };
+
+interface AIReportProps {
+  evalResponse: EvalResponse | null
+  state: State;
+  onAnalyze: () => void | Promise<void>;
+}
+function AIReport({evalResponse, state, onAnalyze}:AIReportProps) {
+  if (null == evalResponse) return null;
+  if ('failure' === evalResponse.status) {
+    return (
+      <Stack direction="column" alignItems="center" justifyContent="center" spacing={1} sx={{ py: 5, px: 3, minHeight: 40,}}>
+        <Typography> Your code must compile to generate an AI analysis. </Typography>
+      </Stack>
+    )
+  }
+  if (`success` === evalResponse.status) return <AnalysisPanel state={state} onAnalyze={onAnalyze}></AnalysisPanel>
+  return <p> If this text appears, it&apos;s a bug :^) </p>;
+}

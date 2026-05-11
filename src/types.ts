@@ -10,27 +10,52 @@ export interface Report {
   expected: string;
   actual: string;
   equal: boolean;
+  error?: string | null;
 }
 
 export type EvalResponse
     = { status: 'success'; report: Report[] }
     | { status: 'failure'; message: string }
 
+
+export interface ProblemMeta {
+    name: string;
+    title: string;
+    difficulty: string;
+    author: string;
+    category: string;
+    question_type: Array<string>;
+}
+
 export interface Problem {
     description: string;
     starter?: string;
-    meta: {
-        name: string;
-        title: string;
-        difficulty: string;
-        author: string;
-        category: string;
-        question_type: Array<string>;
-    };
+    meta: ProblemMeta;
     io: Array<IOPair>;
     mutations?: Array<string>;
     solution?: string;
 }
+export type Usage = { dailyUsed: number; problemUsed: number };
+
+export type AnalyzeRequest = {
+  meta: ProblemMeta;
+  description: string;
+  io: IOPair[];
+  starter: string;
+  code: string;
+  testReport: Report[];
+};
+
+export type AnalyzeSuccess = { ok: true; analysis: string; usage: Usage };
+export type AnalyzeError = {
+  ok: false;
+  kind: 'rate_limit' | 'auth' | 'flag_off' | 'upstream' | 'invalid_input' | 'unknown';
+  message: string;
+  retryAt?: string;
+  usage?: Usage;
+};
+export type AnalyzeResponse = AnalyzeSuccess | AnalyzeError;
+
 
 export type Progress = {
     category: string;
