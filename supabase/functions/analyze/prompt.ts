@@ -1,3 +1,15 @@
+/**
+ * Prompt Generation for Code Analysis
+ * * DESIGN CHOICES & CONSTRAINTS:
+ * 1. No Solution Leakage: The system prompt explicitly forbids writing Python code blocks to prevent giving away the exact answer.
+ * 2. Haystack Override: Injects a 'CRITICAL' rule for haystack problems to ensure the LLM doesn't explicitly name the hidden algorithm (e.g., "This is a Set").
+ * 3. Branching Logic: 
+ * - Passing: Probes for code quality/complexity optimizations.
+ * - Failing: Directs attention to specific failing inputs/outputs from the test report.
+ * 4. Caching: Cache markers are applied to the static System instructions and Problem Description to save tokens.
+ * 5. Tone & Brevity: Capped at 400 tokens and 4 questions maximum to keep hints focused and digestible for students.
+ */
+
 import Anthropic from "anthropic";
 import type { AnalyzeRequest } from "./types.ts";
 
