@@ -203,7 +203,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     ? getColumnStatuses(evalResponse)
     : undefined;
 
-    const {state, run} = useAnalyze();
+    const {state, run} = useAnalyze(problem);
     const onAnalyze = () => run({
     meta: problem.meta,
     description: problem.description,

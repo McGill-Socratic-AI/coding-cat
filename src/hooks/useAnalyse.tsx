@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
-import { useState } from 'react';
-import { AnalyzeError, Usage, AnalyzeRequest, AnalyzeResponse } from '../types';
+import { useState, useEffect } from 'react';
+import { AnalyzeError, Usage, AnalyzeRequest, AnalyzeResponse, Problem } from '../types';
 
 type State =
   | { status: 'idle' }
@@ -8,8 +8,11 @@ type State =
   | { status: 'success'; analysis: string; usage: Usage }
   | { status: 'error'; kind: AnalyzeError['kind']; message: string; retryAt?: string; usage?: Usage };
 
-export default function useAnalyze() {
+export default function useAnalyze(problem: Problem) {
   const [state, setState] = useState<State>({ status: 'idle' });
+  // Reset state when the user switches problems so a previous problem's
+  // success/error result doesn't leak into the new problem's panel.
+  useEffect(() => { setState({ status: 'idle' }); }, [problem.meta.name]);
   async function run(body: AnalyzeRequest) {
     setState({ status: 'loading' });
     if (process.env.REACT_APP_USE_MOCK_ANALYZE === 'true') {
