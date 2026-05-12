@@ -56,7 +56,7 @@ const isEval = Deno.env.get("DENO_ENV") === "eval";
 
 if (isEval) {
   const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "mock" });
-  const MODEL = "claude-sonnet-4-6";
+  const MODEL = "claude-haiku-4-5";
 
   function assertValidResponse(responseText: string, fixtureName: string, expectPass: boolean) {
     // Assert 1: Length blow-out cap
