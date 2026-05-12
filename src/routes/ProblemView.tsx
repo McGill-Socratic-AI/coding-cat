@@ -203,7 +203,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     ? getColumnStatuses(evalResponse)
     : undefined;
 
-    const {state, run} = useAnalyze();
+    const {state, run} = useAnalyze(problem);
     const onAnalyze = () => run({
     meta: problem.meta,
     description: problem.description,
@@ -272,7 +272,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
             ['coding','haystack'].includes(problem.meta.question_type[0]) ? (
               <Box flex={1} width="100%" display = "flex" flexDirection="column" gap={2}>
                 {evalResponse ? (<Report evalResponse={evalResponse} questionType={problem.meta.question_type[0]} /> ) : <Box></Box>}
-                {featureMap['AIAnalysis'] === true && <Box sx={{ border: 2, borderRadius: 10}} >
+                {session && featureMap['AIAnalysis'] === true && <Box sx={{ border: 2, borderRadius: 10}} >
                   <Stack direction="column">
                     <Typography sx={{ p: 2, borderBottom: 2,}} level="h4"> AI Analysis </Typography>
                     {evalResponse ? (<AIReport state={state} onAnalyze={onAnalyze} evalResponse={evalResponse} /> ) : 
