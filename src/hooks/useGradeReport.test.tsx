@@ -18,6 +18,8 @@ const consent: ConsentState = {
   grantedAt: null,
 };
 
+const granted: ConsentState = { ...consent, granted: true, grantedAt: '2026-08-01T00:00:00Z' };
+
 function okResponse(
   overrides: Partial<{
     consent: ConsentState;
@@ -49,13 +51,11 @@ test('loads the current status on mount', async () => {
 
   const { result } = renderHook(() => useGradeReport(true));
 
-  await waitFor(() => expect(result.current.state.status).toBe('ready'));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
   expect(mockInvoke).toHaveBeenCalledWith('submit-grades', { body: { action: 'status' } });
-
-  const s = result.current.state;
-  if (s.status !== 'ready') throw new Error('unreachable');
-  expect(s.grades).toEqual({ exam_1: 88 });
-  expect(s.consent.version).toBe('2026-08-comp204-v1');
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 88 });
+  expect(result.current.state.data?.consent.version).toBe('2026-08-comp204-v1');
+  expect(result.current.state.error).toBeNull();
 });
 
 test('does not call the function when disabled', async () => {
@@ -64,15 +64,14 @@ test('does not call the function when disabled', async () => {
   expect(mockInvoke).not.toHaveBeenCalled();
 });
 
-test('a dark feature flag surfaces as kind:flag_off so the UI can hide itself', async () => {
+test('a dark feature flag on first load surfaces as kind:flag_off with no data', async () => {
   mockInvoke.mockResolvedValue(errorResponse('flag_off', 'Grade reporting is currently disabled', 403));
 
   const { result } = renderHook(() => useGradeReport(true));
 
-  await waitFor(() => expect(result.current.state.status).toBe('error'));
-  const s = result.current.state;
-  if (s.status !== 'error') throw new Error('unreachable');
-  expect(s.kind).toBe('flag_off');
+  await waitFor(() => expect(result.current.state.phase).toBe('error'));
+  expect(result.current.state.error?.kind).toBe('flag_off');
+  expect(result.current.state.data).toBeNull();
 });
 
 test('consent_required surfaces with its own kind rather than collapsing to unknown', async () => {
@@ -82,10 +81,8 @@ test('consent_required surfaces with its own kind rather than collapsing to unkn
 
   const { result } = renderHook(() => useGradeReport(true));
 
-  await waitFor(() => expect(result.current.state.status).toBe('error'));
-  const s = result.current.state;
-  if (s.status !== 'error') throw new Error('unreachable');
-  expect(s.kind).toBe('consent_required');
+  await waitFor(() => expect(result.current.state.phase).toBe('error'));
+  expect(result.current.state.error?.kind).toBe('consent_required');
 });
 
 test('an unparseable error body falls back to kind:unknown', async () => {
@@ -96,20 +93,16 @@ test('an unparseable error body falls back to kind:unknown', async () => {
 
   const { result } = renderHook(() => useGradeReport(true));
 
-  await waitFor(() => expect(result.current.state.status).toBe('error'));
-  const s = result.current.state;
-  if (s.status !== 'error') throw new Error('unreachable');
-  expect(s.kind).toBe('unknown');
+  await waitFor(() => expect(result.current.state.phase).toBe('error'));
+  expect(result.current.state.error?.kind).toBe('unknown');
 });
 
 test('granting consent echoes the version the server offered', async () => {
   mockInvoke.mockResolvedValueOnce(okResponse());
   const { result } = renderHook(() => useGradeReport(true));
-  await waitFor(() => expect(result.current.state.status).toBe('ready'));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
 
-  mockInvoke.mockResolvedValueOnce(
-    okResponse({ consent: { ...consent, granted: true, grantedAt: '2026-08-01T00:00:00Z' } }),
-  );
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted }));
   await act(async () => {
     await result.current.grantConsent('2026-08-comp204-v1');
   });
@@ -117,17 +110,15 @@ test('granting consent echoes the version the server offered', async () => {
   expect(mockInvoke).toHaveBeenLastCalledWith('submit-grades', {
     body: { action: 'consent', consentVersion: '2026-08-comp204-v1' },
   });
-  const s = result.current.state;
-  if (s.status !== 'ready') throw new Error('unreachable');
-  expect(s.consent.granted).toBe(true);
+  expect(result.current.state.data?.consent.granted).toBe(true);
 });
 
 test('submit sends only the values it was given and adopts the server reply', async () => {
-  mockInvoke.mockResolvedValueOnce(okResponse({ grades: { exam_1: 50 } }));
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 50 } }));
   const { result } = renderHook(() => useGradeReport(true));
-  await waitFor(() => expect(result.current.state.status).toBe('ready'));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
 
-  mockInvoke.mockResolvedValueOnce(okResponse({ grades: { exam_1: 91 } }));
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 91 } }));
   await act(async () => {
     await result.current.submit({ exam_1: 91, exam_2: null });
   });
@@ -135,16 +126,17 @@ test('submit sends only the values it was given and adopts the server reply', as
   expect(mockInvoke).toHaveBeenLastCalledWith('submit-grades', {
     body: { action: 'submit', grades: { exam_1: 91, exam_2: null } },
   });
-  const s = result.current.state;
-  if (s.status !== 'ready') throw new Error('unreachable');
   // State comes from the server's reply, not from what we optimistically sent.
-  expect(s.grades).toEqual({ exam_1: 91 });
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 91 });
 });
 
-test('a failed submit reports false and leaves an error state', async () => {
-  mockInvoke.mockResolvedValueOnce(okResponse());
+test('a failed action keeps the last good data instead of erasing it', async () => {
+  // The regression this pins: a single tagged union meant any failure replaced
+  // the whole state, and the UI rendered nothing for flag_off/auth — so a
+  // failed save wiped the form and everything the student had typed.
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 50 } }));
   const { result } = renderHook(() => useGradeReport(true));
-  await waitFor(() => expect(result.current.state.status).toBe('ready'));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
 
   mockInvoke.mockResolvedValueOnce(errorResponse('rate_limit', 'Too many changes today.', 429));
   let ok: boolean | undefined;
@@ -153,17 +145,66 @@ test('a failed submit reports false and leaves an error state', async () => {
   });
 
   expect(ok).toBe(false);
-  const s = result.current.state;
-  if (s.status !== 'error') throw new Error('unreachable');
-  expect(s.kind).toBe('rate_limit');
+  expect(result.current.state.phase).toBe('ready');
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 50 });
+  expect(result.current.state.error?.kind).toBe('rate_limit');
+});
+
+test('even flag_off after a successful load keeps the data on screen', async () => {
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 50 } }));
+  const { result } = renderHook(() => useGradeReport(true));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
+
+  mockInvoke.mockResolvedValueOnce(errorResponse('flag_off', 'disabled', 403));
+  await act(async () => {
+    await result.current.submit({ exam_1: 91 });
+  });
+
+  expect(result.current.state.phase).toBe('ready');
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 50 });
+});
+
+test('dismissError clears the banner without touching the data', async () => {
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 50 } }));
+  const { result } = renderHook(() => useGradeReport(true));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
+
+  mockInvoke.mockResolvedValueOnce(errorResponse('unknown', 'boom', 500));
+  await act(async () => {
+    await result.current.submit({ exam_1: 91 });
+  });
+  expect(result.current.state.error).not.toBeNull();
+
+  act(() => {
+    result.current.dismissError();
+  });
+  expect(result.current.state.error).toBeNull();
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 50 });
+});
+
+test('a successful action clears a previous error', async () => {
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted }));
+  const { result } = renderHook(() => useGradeReport(true));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
+
+  mockInvoke.mockResolvedValueOnce(errorResponse('unknown', 'boom', 500));
+  await act(async () => {
+    await result.current.submit({ exam_1: 91 });
+  });
+  expect(result.current.state.error).not.toBeNull();
+
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 91 } }));
+  await act(async () => {
+    await result.current.retry();
+  });
+  expect(result.current.state.error).toBeNull();
+  expect(result.current.state.data?.grades).toEqual({ exam_1: 91 });
 });
 
 test('withdraw asks the server to delete and adopts the emptied reply', async () => {
-  mockInvoke.mockResolvedValueOnce(
-    okResponse({ consent: { ...consent, granted: true }, grades: { exam_1: 70 } }),
-  );
+  mockInvoke.mockResolvedValueOnce(okResponse({ consent: granted, grades: { exam_1: 70 } }));
   const { result } = renderHook(() => useGradeReport(true));
-  await waitFor(() => expect(result.current.state.status).toBe('ready'));
+  await waitFor(() => expect(result.current.state.phase).toBe('ready'));
 
   mockInvoke.mockResolvedValueOnce(okResponse({ consent, grades: {} }));
   await act(async () => {
@@ -171,8 +212,6 @@ test('withdraw asks the server to delete and adopts the emptied reply', async ()
   });
 
   expect(mockInvoke).toHaveBeenLastCalledWith('submit-grades', { body: { action: 'withdraw' } });
-  const s = result.current.state;
-  if (s.status !== 'ready') throw new Error('unreachable');
-  expect(s.consent.granted).toBe(false);
-  expect(s.grades).toEqual({});
+  expect(result.current.state.data?.consent.granted).toBe(false);
+  expect(result.current.state.data?.grades).toEqual({});
 });

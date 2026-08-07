@@ -89,11 +89,35 @@ pseudonym = HMAC-SHA256(RESEARCH_SALT, auth.uid())
 the browser. `self_reported_grades` has no `profile_id`, no `user_id`, and no
 foreign key to `auth.users` — nothing in the schema links a row to a person.
 Someone holding the entire database, or a leaked service-role key, sees only
-opaque 64-hex strings and cannot join to `profiles.student_id`.
+opaque 64-hex strings and cannot *directly* join to `profiles.student_id`.
 
 The research export applies the same HMAC on the other side, so grades line up
-with usage without a raw UUID entering the dataset. Destroying the salt after
-export converts the retained data from pseudonymous to anonymous.
+with usage without a raw UUID entering the dataset.
+
+**What destroying the salt does and does not buy.** An earlier version of this
+design claimed the salt was the whole story: destroy it and the retained data is
+anonymous. Adversarially reviewing the implementation showed that to be false,
+and the correction is worth recording because it is the kind of over-claim that
+survives into an ethics submission.
+
+Correlated timing is a join key. Two instances:
+
+- The export emitted `first_activity` and `last_activity` copied verbatim from
+  `submissions.submitted_at` and `analyze_calls.created_at`, at microsecond
+  precision. Those pairs are unique per student essentially always, so with the
+  salt already destroyed, one equality join against the operational tables
+  re-identified every row of a test fixture. Dates are now coarsened to the ISO
+  week, and the export refuses to write a file containing a precise timestamp.
+- `research_consent.created_at` is keyed by `profile_id`, and the UI drops a
+  student straight into the entry form after they agree — so a grant at 14:03:07
+  and a grade row seconds later identified each other. `submitted_at` is now a
+  `DATE`, which leaves only "someone who consented that day".
+
+Neither fix is complete: behavioural counts remain distinctive, and perfect
+unlinkability would require the two tables not to share a database. The honest
+position, now written into the consent text and the runbook, is that the salt
+removes the direct link and **retention** removes the rest — the account-keyed
+tables must not outlive the study.
 
 Three choices inside that are worth recording:
 

@@ -8,27 +8,40 @@ import {
   GradesResponse,
 } from '../types';
 
-type Loaded = {
+export type Loaded = {
   consent: ConsentState;
   grades: Partial<Record<GradeItem, number>>;
 };
 
-export type GradeReportState =
-  | { status: 'loading' }
-  | ({ status: 'ready' } & Loaded)
-  | { status: 'error'; kind: GradesError['kind']; message: string };
+export type GradeReportState = {
+  phase: 'loading' | 'ready' | 'error';
+  /**
+   * The last view the server confirmed, kept across a subsequent failure.
+   *
+   * An earlier version modelled this as a single tagged union, so any failed
+   * action replaced the whole state with an error — and the UI, which rendered
+   * nothing at all for `flag_off` and `auth`, erased the form and whatever the
+   * student had typed into it. Errors are now additive: the last good data
+   * stays put and the error is reported alongside it.
+   */
+  data: Loaded | null;
+  error: { kind: GradesError['kind']; message: string } | null;
+};
 
 /**
  * Talks to the `submit-grades` Edge Function.
  *
  * Every action returns the server's whole freshly-read view (consent state plus
- * the caller's current answers), so this hook never has to reason about what
- * the server now believes — it just replaces its state with the reply. That
- * also means a failed save cannot leave the form showing values that were
- * never stored.
+ * the caller's current answers), so this hook never has to reason about what the
+ * server now believes — it replaces `data` with the reply. That also means a
+ * failed save cannot leave the form showing values that were never stored.
  */
 export default function useGradeReport(enabled: boolean) {
-  const [state, setState] = useState<GradeReportState>({ status: 'loading' });
+  const [state, setState] = useState<GradeReportState>({
+    phase: 'loading',
+    data: null,
+    error: null,
+  });
   const [busy, setBusy] = useState(false);
 
   const call = useCallback(async (body: GradesRequest): Promise<boolean> => {
@@ -36,6 +49,17 @@ export default function useGradeReport(enabled: boolean) {
       'submit-grades',
       { body },
     );
+
+    const fail = (kind: GradesError['kind'], message: string) => {
+      setState((prev) => ({
+        // Keep whatever we last knew; only a failure with nothing loaded is a
+        // dead end.
+        phase: prev.data ? 'ready' : 'error',
+        data: prev.data,
+        error: { kind, message },
+      }));
+      return false;
+    };
 
     if (error) {
       // supabase-js reports non-2xx through `error`, with the response body on
@@ -48,34 +72,24 @@ export default function useGradeReport(enabled: boolean) {
       } catch {
         /* fall through to the generic message below */
       }
-      if (parsed && parsed.ok === false) {
-        setState({ status: 'error', kind: parsed.kind, message: parsed.message });
-      } else {
-        setState({
-          status: 'error',
-          kind: 'unknown',
-          message: 'Could not reach the grade reporting service. ' + error.message,
-        });
-      }
       console.error(error);
-      return false;
+      if (parsed && parsed.ok === false) return fail(parsed.kind, parsed.message);
+      return fail(
+        'unknown',
+        'Could not reach the grade reporting service. ' + error.message,
+      );
     }
 
     if (!data) {
-      setState({
-        status: 'error',
-        kind: 'unknown',
-        message: 'The grade reporting service did not return a response.',
-      });
-      return false;
+      return fail('unknown', 'The grade reporting service did not return a response.');
     }
+    if (data.ok === false) return fail(data.kind, data.message);
 
-    if (data.ok === false) {
-      setState({ status: 'error', kind: data.kind, message: data.message });
-      return false;
-    }
-
-    setState({ status: 'ready', consent: data.consent, grades: data.grades });
+    setState({
+      phase: 'ready',
+      data: { consent: data.consent, grades: data.grades },
+      error: null,
+    });
     return true;
   }, []);
 
@@ -83,7 +97,6 @@ export default function useGradeReport(enabled: boolean) {
     if (!enabled) return;
     let cancelled = false;
     (async () => {
-      setState({ status: 'loading' });
       if (cancelled) return;
       await call({ action: 'status' });
     })();
@@ -119,5 +132,10 @@ export default function useGradeReport(enabled: boolean) {
 
   const retry = useCallback(() => withBusy({ action: 'status' }), [withBusy]);
 
-  return { state, busy, grantConsent, withdraw, submit, retry };
+  const dismissError = useCallback(
+    () => setState((prev) => ({ ...prev, error: null })),
+    [],
+  );
+
+  return { state, busy, grantConsent, withdraw, submit, retry, dismissError };
 }

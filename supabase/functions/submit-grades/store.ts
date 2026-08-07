@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "supabase";
-import { type GradeItem, type GradeMap, isGradeItem } from "./types.ts";
+import { type GradeItem, GRADE_ITEMS, type GradeMap, isGradeItem } from "./types.ts";
 
 // A legitimate student edits a handful of values a handful of times across a
 // term. This cap exists only so an authenticated client cannot append rows
@@ -55,35 +55,46 @@ export async function recordConsent(
 /**
  * The caller's current answers.
  *
- * The table is append-only, so "current" means the newest row per item_key. We
- * reduce in JS rather than reaching for DISTINCT ON because PostgREST has no
- * clean way to express it and the row count per student is bounded by
- * DAILY_ROW_CAP anyway.
+ * The table is append-only, so "current" means the newest row per item_key.
+ *
+ * One indexed query per item rather than one query for everything. An earlier
+ * version fetched a capped page of the student's rows and reduced in JS, on the
+ * reasoning that DAILY_ROW_CAP bounded the row count — which was simply wrong:
+ * that cap is per rolling 24 hours, not per student, so across a term a student
+ * can accumulate far more rows than any single page. A student who revised one
+ * score many times would then push the newest row for a *different* item off the
+ * end of the page and be told that score was never entered.
+ *
+ * PostgREST cannot express DISTINCT ON, and seven parallel primary-key-ordered
+ * lookups against the (pseudonym, item_key, submitted_at DESC) index are cheap
+ * and, unlike a page-and-reduce, correct at any history length.
  */
 export async function readGrades(
   service: SupabaseClient,
   pseudonym: string,
 ): Promise<Partial<Record<GradeItem, number>>> {
-  const { data, error } = await service
-    .from("self_reported_grades")
-    .select("item_key, score, submitted_at")
-    .eq("pseudonym", pseudonym)
-    .order("submitted_at", { ascending: false })
-    .limit(1000);
+  const results = await Promise.all(
+    GRADE_ITEMS.map(async (item) => {
+      const { data, error } = await service
+        .from("self_reported_grades")
+        .select("item_key, score")
+        .eq("pseudonym", pseudonym)
+        .eq("item_key", item)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (error) {
-    console.error("[store] readGrades error:", error);
-    throw new Error("could not read grades");
-  }
+      if (error) {
+        console.error("[store] readGrades error:", error);
+        throw new Error("could not read grades");
+      }
+      return data as { item_key: string; score: number | string } | null;
+    }),
+  );
 
   const out: Partial<Record<GradeItem, number>> = {};
-  for (
-    const row of (data ?? []) as Array<
-      { item_key: string; score: number | string }
-    >
-  ) {
-    if (!isGradeItem(row.item_key)) continue;
-    if (row.item_key in out) continue; // rows are newest-first, so keep the first
+  for (const row of results) {
+    if (!row || !isGradeItem(row.item_key)) continue;
     // PostgREST returns NUMERIC as a string to preserve precision.
     const score = typeof row.score === "string" ? Number(row.score) : row.score;
     if (Number.isFinite(score)) out[row.item_key] = score;
@@ -91,17 +102,23 @@ export async function readGrades(
   return out;
 }
 
-/** Rows this pseudonym has appended in the last 24 hours. */
+/**
+ * Rows this pseudonym has appended today.
+ *
+ * UTC day, matching the analyze function's rate limiter, and matching the
+ * "try again tomorrow" the caller is told. `submitted_at` is a DATE, so this is
+ * a plain date comparison rather than a rolling window.
+ */
 export async function countRecentRows(
   service: SupabaseClient,
   pseudonym: string,
 ): Promise<number> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const today = new Date().toISOString().slice(0, 10);
   const { count, error } = await service
     .from("self_reported_grades")
     .select("id", { count: "exact", head: true })
     .eq("pseudonym", pseudonym)
-    .gte("submitted_at", since);
+    .gte("submitted_at", today);
 
   if (error) {
     // Fail open: a counting failure must not block a student from reporting a

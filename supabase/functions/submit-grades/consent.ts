@@ -24,17 +24,21 @@ how they did in the course.
 
 What this means in practice:
 
-- Your name, email, and student number are **not** stored with your scores, and
-  cannot be recovered from them by anyone who only has access to the database.
+- Your name, email, and student number are **not** stored alongside your scores.
 - The link is **pseudonymous, not anonymous**. The research team holds the key
-  and can therefore connect your scores to your account while the study is
-  running. Once the study data has been exported, the key is destroyed, after
-  which the retained data is anonymous.
+  and can connect your scores to your account while the study is running. The
+  key is destroyed once the data has been exported.
+- Destroying the key removes the direct link, but it does not make the data
+  impossible to trace. How much you used the tutor is also recorded against
+  your account, so someone with access to both could try to match the two up.
+  We reduce this by reporting dates only to the nearest week, and by deleting
+  the course data at the end of the study — but we would rather tell you than
+  claim more than we can deliver.
 - Your instructor does not see your individual entries.
 - Your Socratic AI conversations are processed by Anthropic (a service located
   in the United States) in order to generate replies.
 - You can withdraw at any time from this page. Withdrawing deletes the scores
-  you entered.
+  you entered and removes you from the study.
 
 Nothing here is checked against official records, and entering nothing at all
 is a perfectly fine choice.

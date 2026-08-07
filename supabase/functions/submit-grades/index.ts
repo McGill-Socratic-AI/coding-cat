@@ -25,8 +25,14 @@ import type { GradesError, GradesErrorKind, GradesOk } from "./types.ts";
 
 const FEATURE_FLAG = "GradeSelfReport";
 
-// Guards against an oversized body being parsed at all. Grade payloads are a
-// few hundred bytes; anything approaching this is not a real submission.
+// Grade payloads are a few hundred bytes; anything approaching this is not a
+// real submission.
+//
+// Measured in bytes, not string length: `rawBody.length` counts UTF-16 code
+// units, so a body of multi-byte characters could be up to three times the
+// named limit. Content-Length is checked first so an oversized body is refused
+// before it is read at all, with the encoded check as the authoritative
+// backstop for a missing or dishonest header.
 const MAX_BODY_BYTES = 16 * 1024;
 
 function jsonError(
@@ -67,8 +73,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // --- Body ----------------------------------------------------------------
+  const declaredLength = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return jsonError("invalid_input", "Request body too large", 413);
+  }
+
   const rawBody = await req.text();
-  if (rawBody.length > MAX_BODY_BYTES) {
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
     return jsonError("invalid_input", "Request body too large", 413);
   }
 
@@ -120,16 +131,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
             409,
           );
         }
-        await recordConsent(service, userId, CONSENT_VERSION, "granted");
+        // Idempotent. Agreeing twice is not a second decision, and without this
+        // the ledger is an unbounded append target for an authenticated client —
+        // DAILY_ROW_CAP only ever guarded the grades table.
+        const current = await readLatestConsent(service, userId);
+        const alreadyGranted = current?.action === "granted" &&
+          current.consent_version === CONSENT_VERSION;
+        if (!alreadyGranted) {
+          await recordConsent(service, userId, CONSENT_VERSION, "granted");
+        }
         break;
       }
 
       case "withdraw": {
-        // Record first, then delete. If the delete fails we are left with a
-        // withdrawal on record and data still present, which is visible and
-        // fixable; the reverse order could delete data with no audit trail.
-        await recordConsent(service, userId, CONSENT_VERSION, "withdrawn");
+        // Delete first, then record.
+        //
+        // The reverse order looks like it preserves the audit trail, but if the
+        // delete fails it leaves the ledger asserting a withdrawal that did not
+        // happen while the data is still there — and nothing in the API or the
+        // UI would ever surface that, because every subsequent read reports the
+        // student as withdrawn. This way a failed delete surfaces as an error
+        // the student can retry, and the worst case is data removed while
+        // consent still reads as granted, which is both visible and recoverable.
         await deleteAllGrades(service, pseudonym);
+
+        const current = await readLatestConsent(service, userId);
+        if (current?.action !== "withdrawn") {
+          await recordConsent(service, userId, CONSENT_VERSION, "withdrawn");
+        }
         break;
       }
 
@@ -150,13 +179,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
           );
         }
 
-        const recent = await countRecentRows(service, pseudonym);
-        if (recent >= DAILY_ROW_CAP) {
-          return jsonError(
-            "rate_limit",
-            "Too many changes today. Please try again tomorrow.",
-            429,
-          );
+        // The cap exists to bound how many rows can be appended, so it applies
+        // only to submissions that actually append. A payload of nothing but
+        // clears removes rows; refusing it as "too many changes" would leave a
+        // student unable to delete a score they entered by mistake.
+        const inserts = Object.values(request.grades)
+          .filter((value) => value !== null).length;
+        if (inserts > 0) {
+          const recent = await countRecentRows(service, pseudonym);
+          if (recent + inserts > DAILY_ROW_CAP) {
+            return jsonError(
+              "rate_limit",
+              "Too many changes today. Please try again tomorrow.",
+              429,
+            );
+          }
         }
 
         await applyGrades(service, pseudonym, request.grades, CONSENT_VERSION);
@@ -178,9 +215,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         granted,
         grantedAt: granted ? (latest?.created_at ?? null) : null,
       },
-      // No point reading rows back for someone who has not consented; they
-      // cannot have any.
-      grades: granted ? await readGrades(service, pseudonym) : {},
+      // Always read the caller's own rows back, never conditioned on `granted`.
+      //
+      // An earlier version returned {} whenever consent was not currently
+      // granted, reasoning that such a student could not have any. That is false
+      // after a CONSENT_VERSION bump: their rows survive the bump, `granted`
+      // goes false until they re-accept, and the endpoint would have told them
+      // their data was gone while it was still stored. Withdrawal deletes the
+      // rows, so a genuinely withdrawn student reads back {} on the facts.
+      grades: await readGrades(service, pseudonym),
     });
   } catch (e) {
     console.error("[submit-grades] unexpected error:", e);

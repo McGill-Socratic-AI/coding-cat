@@ -88,19 +88,22 @@ function fakeClient(respond: (state: QueryState) => unknown) {
 const PSEUDONYM = "a".repeat(64);
 
 // --- readGrades ------------------------------------------------------------
+//
+// readGrades issues one newest-first lookup per grade item, so the fake answers
+// per item_key filter.
 
-Deno.test("readGrades keeps the newest row per item, not the first seen", async () => {
-  // store.ts orders newest-first, so the fake returns rows in that order.
-  const { client } = fakeClient(() => ({
-    data: [
-      { item_key: "exam_1", score: 91, submitted_at: "2026-11-02T00:00:00Z" },
-      { item_key: "exam_1", score: 55, submitted_at: "2026-10-01T00:00:00Z" },
-      {
-        item_key: "assignment_2",
-        score: 78,
-        submitted_at: "2026-10-05T00:00:00Z",
-      },
-    ],
+function itemOf(state: QueryState): string | undefined {
+  const filter = state.filters.find(([op, col]) => op === "eq" && col === "item_key");
+  return filter ? (filter[2] as string) : undefined;
+}
+
+Deno.test("readGrades returns the newest row for each item", async () => {
+  const stored: Record<string, unknown> = {
+    exam_1: { item_key: "exam_1", score: 91 },
+    assignment_2: { item_key: "assignment_2", score: 78 },
+  };
+  const { client } = fakeClient((state) => ({
+    data: stored[itemOf(state) ?? ""] ?? null,
     error: null,
   }));
 
@@ -108,45 +111,58 @@ Deno.test("readGrades keeps the newest row per item, not the first seen", async 
   assertEquals(grades, { exam_1: 91, assignment_2: 78 });
 });
 
+Deno.test("readGrades asks for the newest row by id, per item", async () => {
+  // The correctness property: a student who revised one score a thousand times
+  // must not lose the newest row for a different item. That only holds if each
+  // item is queried on its own, ordered by id descending, limit 1.
+  const { client, calls } = fakeClient(() => ({ data: null, error: null }));
+  await readGrades(client as never, PSEUDONYM);
+
+  assertEquals(calls.length, 7, "one query per grade item");
+  for (const call of calls) {
+    assertEquals(call.table, "self_reported_grades");
+    assertEquals(call.order, ["id", { ascending: false }]);
+    assertEquals(call.limit, 1);
+    assertEquals(call.filters[0], ["eq", "pseudonym", PSEUDONYM]);
+  }
+  const items = calls.map(itemOf).sort();
+  assertEquals(items, [
+    "assignment_1",
+    "assignment_2",
+    "assignment_3",
+    "assignment_4",
+    "exam_1",
+    "exam_2",
+    "exam_3",
+  ]);
+});
+
 Deno.test("readGrades coerces PostgREST's string NUMERIC into a number", async () => {
   // PostgREST serialises NUMERIC as a string to avoid float precision loss.
-  const { client } = fakeClient(() => ({
-    data: [{
-      item_key: "exam_1",
-      score: "87.50",
-      submitted_at: "2026-11-02T00:00:00Z",
-    }],
-    error: null,
-  }));
+  const { client } = fakeClient((state) =>
+    itemOf(state) === "exam_1"
+      ? { data: { item_key: "exam_1", score: "87.50" }, error: null }
+      : { data: null, error: null }
+  );
 
   const grades = await readGrades(client as never, PSEUDONYM);
   assertEquals(grades.exam_1, 87.5);
   assertEquals(typeof grades.exam_1, "number");
 });
 
-Deno.test("readGrades ignores rows whose item_key is not a known item", async () => {
-  const { client } = fakeClient(() => ({
-    data: [
-      { item_key: "exam_1", score: 70, submitted_at: "2026-11-02T00:00:00Z" },
-      {
-        item_key: "midterm_9",
-        score: 70,
-        submitted_at: "2026-11-02T00:00:00Z",
-      },
-    ],
-    error: null,
-  }));
+Deno.test("readGrades ignores a row whose item_key is not a known item", async () => {
+  const { client } = fakeClient((state) =>
+    itemOf(state) === "exam_1"
+      ? { data: { item_key: "midterm_9", score: 70 }, error: null }
+      : { data: null, error: null }
+  );
 
-  const grades = await readGrades(client as never, PSEUDONYM);
-  assertEquals(grades, { exam_1: 70 });
+  assertEquals(await readGrades(client as never, PSEUDONYM), {});
 });
 
-Deno.test("readGrades scopes the query to the caller's pseudonym", async () => {
-  const { client, calls } = fakeClient(() => ({ data: [], error: null }));
-  await readGrades(client as never, PSEUDONYM);
-
-  assertEquals(calls[0].table, "self_reported_grades");
-  assertEquals(calls[0].filters, [["eq", "pseudonym", PSEUDONYM]]);
+Deno.test("readGrades returns an empty map when nothing is stored", async () => {
+  const { client } = fakeClient(() => ({ data: null, error: null }));
+  assertEquals(await readGrades(client as never, PSEUDONYM), {});
 });
 
 Deno.test("readGrades surfaces a database error instead of returning empty", async () => {

@@ -1,6 +1,7 @@
 import { getCategoryList } from './getCategoryList';
 import { getCompletedProblems } from './getCompletedProblems';
 import { blankContract } from '../types';
+import { contractCategories } from './contractCategories';
 import { Problem, Submission } from '../types';
 
 // Regression guard for the REACT_APP_PROBLEM_SET bypass.
@@ -58,6 +59,15 @@ describe('getCategoryList', () => {
   test('handles an empty set', () => {
     expect(getCategoryList([])).toEqual([]);
   });
+
+  test('the first entry is a category that exists, for the default selection', () => {
+    // root.tsx opens on getCategoryList(problems)[0]. It used to open on the
+    // literal 'Fundamentals', which exists in the upstream set and in no other,
+    // so the drawer opened on a category holding no problems.
+    expect(getCategoryList(COMP204_SET)[0]).toBe('Dictionaries');
+    expect(getCategoryList(DEFAULT_SET)[0]).toBe('Fundamentals');
+    expect(getCategoryList([])[0]).toBeUndefined();
+  });
 });
 
 describe('getCompletedProblems', () => {
@@ -105,6 +115,31 @@ describe('getCompletedProblems', () => {
 
   test('handles an empty set', () => {
     expect(getCompletedProblems([], noSubmissions)).toEqual([]);
+  });
+});
+
+describe('contractCategories', () => {
+  const COMP204 = ['Dictionaries', 'Files'];
+  const UPSTREAM = ['Fundamentals', 'List-1: Indexing', 'Logic', 'String-1', 'String-2'];
+
+  test('stage 1 shows only the staged subset for the upstream set', () => {
+    expect(contractCategories(UPSTREAM, false).sort())
+      .toEqual(['Fundamentals', 'List-1: Indexing', 'Logic', 'String-1']);
+  });
+
+  test('stage 2 shows everything', () => {
+    expect(contractCategories(UPSTREAM, true)).toEqual(UPSTREAM);
+  });
+
+  test('a set sharing no names with the staged list still renders', () => {
+    // The bug: the intersection was rendered directly, so COMP204 students
+    // opened their contract and found nothing at all to fill in.
+    expect(contractCategories(COMP204, false)).toEqual(COMP204);
+  });
+
+  test('an empty set stays empty rather than throwing', () => {
+    expect(contractCategories([], false)).toEqual([]);
+    expect(contractCategories([], true)).toEqual([]);
   });
 });
 

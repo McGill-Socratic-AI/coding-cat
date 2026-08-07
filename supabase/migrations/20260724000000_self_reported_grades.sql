@@ -43,9 +43,23 @@
 -- research_consent: append-only consent ledger
 -- ---------------------------------------------------------------------------
 -- Keyed by profile_id ON PURPOSE. Consent must be attributable to a real person
--- to be meaningful and to honour withdrawal. This table does not weaken the
--- pseudonymity of self_reported_grades: knowing that a student consented tells
--- you nothing about which grade rows are theirs without the salt.
+-- to be meaningful and to honour withdrawal.
+--
+-- It does weaken pseudonymity, and an earlier version of this comment claimed
+-- otherwise. Correlated timing is a join key: the UI drops a student straight
+-- into the entry form after they agree, so a `granted` row at 14:03:07 and a
+-- grade row seconds later identify each other without anyone touching the salt.
+--
+-- Mitigated, not eliminated. `self_reported_grades.submitted_at` is a DATE, so
+-- the grades side carries no time of day to align against — an attacker holding
+-- the database sees only "someone who consented on this day". At cohort scale
+-- several students consent on any given day, which makes the match ambiguous
+-- rather than certain.
+--
+-- Perfect unlinkability would require the two tables not to share a database,
+-- which is not achievable here. The real control is retention: this table and
+-- the account-keyed application tables must not outlive the study. That is
+-- recorded as a protocol step in docs/comp204-deployment.md.
 
 CREATE TABLE research_consent (
   id               BIGSERIAL PRIMARY KEY,
@@ -98,7 +112,12 @@ CREATE TABLE self_reported_grades (
   -- from the consent ledger at write time so the dataset is self-describing.
   consent_version  TEXT NOT NULL,
 
-  submitted_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- DATE, not TIMESTAMPTZ, and that is a privacy decision rather than an
+  -- oversight. A precise write time aligns with research_consent.created_at (and
+  -- with submissions/analyze_calls, which are keyed by real account id) closely
+  -- enough to re-identify a row without the salt. Nothing needs the precision:
+  -- ordering uses the BIGSERIAL id, and the daily write cap works on dates.
+  submitted_at     DATE NOT NULL DEFAULT CURRENT_DATE,
 
   CONSTRAINT self_reported_grades_pseudonym_shape
     CHECK (pseudonym ~ '^[0-9a-f]{64}$'),
@@ -111,10 +130,17 @@ CREATE TABLE self_reported_grades (
     CHECK (score >= 0 AND score <= 100)
 );
 
--- Serves both reads we care about: "this student's current answers" (the UI,
--- via the Edge Function) and "latest row per key" (the export).
+-- Ordered by id, not submitted_at: the id is the only strictly increasing key
+-- (submitted_at is a DATE and ties constantly), and both readers — the Edge
+-- Function reading one item back for a student, and the export reducing the log
+-- to the latest value per item — want "the newest row for this pseudonym and
+-- item".
 CREATE INDEX self_reported_grades_latest_idx
-  ON self_reported_grades(pseudonym, item_key, submitted_at DESC);
+  ON self_reported_grades(pseudonym, item_key, id DESC);
+
+-- Supports the daily write cap.
+CREATE INDEX self_reported_grades_recent_idx
+  ON self_reported_grades(pseudonym, submitted_at);
 
 ALTER TABLE self_reported_grades ENABLE ROW LEVEL SECURITY;
 

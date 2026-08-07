@@ -300,16 +300,44 @@ SUPABASE_SERVICE_ROLE_KEY=<service role> \
 RESEARCH_SALT=<the salt> \
 SOCRATIC_SUPABASE_URL=https://<SOCRATIC_REF>.supabase.co \
 SOCRATIC_SERVICE_ROLE_KEY=<service role> \
+SOCRATIC_COURSE_OFFERING=comp204-f2026 \
 node scripts/research-export.mjs --out ./export
 ```
 
-The script refuses to run under the publicly-known test salt, refuses a salt
-under 128 bits, and scans every file for UUID and email patterns before writing.
+Only students whose latest consent decision is a grant at the current version
+are included — withdrawal deletes their grades, but their usage rows live in
+ordinary application tables that nothing deletes, so the filter has to happen
+here.
 
-**Then destroy `RESEARCH_SALT`.** Until it is gone the dataset is pseudonymous
-and its holder can re-identify participants; once it is gone the retained data
-is anonymous. That is what the consent text promises, so it is a step in the
-protocol, not housekeeping.
+The script refuses to run under the publicly-known test salt, refuses a salt
+under 128 bits, and scans every file for UUIDs, email addresses **and precise
+timestamps** before writing.
+
+### Then two destruction steps, not one
+
+**1. Destroy `RESEARCH_SALT`.** This removes the direct route from a pseudonym
+back to an account.
+
+**2. Delete the operational data.** This one is easy to skip and it is what
+actually makes the first step meaningful.
+
+Destroying the salt alone does *not* make the dataset unlinkable. Every
+per-student count in the export — analyses, submissions, active days, tutor
+turns — also exists, keyed by real account id, in `submissions`,
+`analyze_calls`, and socratic's `sessions`/`turns`. Anyone holding both could
+attempt to match on the combination.
+
+This was found by adversarially reviewing the first version of the export, which
+emitted `first_activity` and `last_activity` at microsecond precision. Those
+timestamps were unique per student essentially always, and a single equality
+join against `submissions` re-identified every row in a test fixture with the
+salt already destroyed. Dates are now reported as ISO weeks and the export
+refuses to write a file containing a precise timestamp, but coarsening reduces
+the risk rather than removing it: behavioural counts stay distinctive.
+
+So: once the study data is exported and the salt is gone, delete the
+account-keyed tables (or the whole project). Put a date on it in the REB
+protocol. Retention is the control here, not cryptography.
 
 ---
 

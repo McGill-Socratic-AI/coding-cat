@@ -24,7 +24,13 @@ export default function App() {
   const [openCategory, setOpenCategory] = useState(false);
   const [activeProblem, setActiveProblem] = useState<null | string>(null);
   const problems = useLoaderData() as Problem[];
-  const [activeCategory, setActiveCategory] = useState<string | null>(() => {return 'Fundamentals';});
+  // First category of whatever problem set loaded, rather than the literal
+  // 'Fundamentals'. That name exists in the upstream set but not necessarily in
+  // another one, and when it does not the drawer opens on a category with no
+  // problems in it.
+  const [activeCategory, setActiveCategory] = useState<string | null>(
+    () => getCategoryList(problems)[0] ?? null
+  );
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [searchedProblems, setSearchedProblems] = useState<Problem[]>([]);
