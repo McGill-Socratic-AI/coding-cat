@@ -11,6 +11,11 @@ import { capitalizeString } from '../utils/capitalizeString';
 import sortProblems from '../utils/sortProblems';
 
 interface ProblemListProps {
+  /**
+   * The full configured problem set. Distinct from `searchedProblems`: the
+   * per-category totals must not shrink as the user types in the search box.
+   */
+  problems: Problem[];
   searchedProblems: Problem[];
   selectedTab: string;
   setSelectedTab: (peep: string) => void;
@@ -23,7 +28,7 @@ interface ProblemListProps {
 }
 
 // TODO: selectedTopic here refers to the category. The variable name should probably be changed to reflect that.
-export default function ProblemList({selectedTab, setSelectedTab, searchedProblems, selectedTopic, activeProblem, closeDrawer, session, contractProgress}: ProblemListProps) {
+export default function ProblemList({problems, selectedTab, setSelectedTab, searchedProblems, selectedTopic, activeProblem, closeDrawer, session, contractProgress}: ProblemListProps) {
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<Submission[]>([]);
   const [order, setOrder] = useState("asc");
@@ -32,8 +37,8 @@ export default function ProblemList({selectedTab, setSelectedTab, searchedProble
   const sortCategories = ["name", "completed", "difficulty"];
   
   const completedProblems = useMemo(() => {
-    return getCompletedProblems(progress).filter((p) => p.category === selectedTopic)[0];
-  }, [selectedTopic, progress]);
+    return getCompletedProblems(problems, progress).filter((p) => p.category === selectedTopic)[0];
+  }, [problems, selectedTopic, progress]);
     
   let percentageCompleted = Math.round((completedProblems?.completed / (contractProgress[selectedTopic!!] || (completedProblems?.total ?? 0)) * 100));
   if (percentageCompleted > 100) percentageCompleted = 100;

@@ -1,5 +1,4 @@
-import problems from "../problems/problems";
-import { Progress, Submission } from "../types";
+import { Problem, Progress, Submission } from "../types";
 
 interface CompletedByCategory {
   problems: {
@@ -10,8 +9,13 @@ interface CompletedByCategory {
 
 /**
  * Returns an array of objects containing each category and what problems were completed in it.
+ *
+ * `problems` must be the full configured problem set, not a filtered or searched
+ * subset — the per-category totals are computed from it. It is a parameter
+ * rather than a static import so that `REACT_APP_PROBLEM_SET` is actually
+ * honoured; see getCategoryList.ts for the bug this fixes.
  */
-export function getCompletedProblems(submissions: Submission[]): Progress[] {
+export function getCompletedProblems(problems: Problem[], submissions: Submission[]): Progress[] {
   const totalByCategory: Record<string, number> = {};
   const questionTypeByCategory: Record<string, string> = {};
   const completedByCategory: Record<string, CompletedByCategory> = {};
@@ -34,7 +38,7 @@ export function getCompletedProblems(submissions: Submission[]): Progress[] {
   for (const p of problems) {
     const question_type = p.meta.question_type[0];
     const category = question_type === "coding" ? p.meta.category : question_type;
-    
+
     completedTitles.forEach((ct) => {
       if (ct === p.meta.name) {
         if (!completedByCategory[category]) {

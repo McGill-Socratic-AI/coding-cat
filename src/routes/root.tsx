@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react' ;
 import { Outlet, useLoaderData } from 'react-router';
 import { Link } from 'react-router-dom';
-import { BLANK_CONTRACT, ContractData, ContractProgress, Problem } from '../types';
+import { blankContract, ContractData, ContractProgress, Problem } from '../types';
+import { getCategoryList } from '../utils/getCategoryList';
 import { supabase } from '../supabaseClient'
 import type { Session } from '@supabase/supabase-js'
 import {List as ListIcon} from '@phosphor-icons/react';
@@ -28,7 +29,12 @@ export default function App() {
   const [difficulty, setDifficulty] = useState("");
   const [searchedProblems, setSearchedProblems] = useState<Problem[]>([]);
   const [selectedTab, setSelectedTab] = useState("");
-  const [contract, setContract] = useState<ContractData>(BLANK_CONTRACT);
+  // Keyed by the categories of the problem set that actually loaded, so a
+  // second problem set (REACT_APP_PROBLEM_SET) gets its own categories rather
+  // than the default set's.
+  const [contract, setContract] = useState<ContractData>(
+    () => blankContract(getCategoryList(problems))
+  );
   const [featureMap, setFeatureMap] = useState<Record<string, boolean>>({'AIAnalysis': process.env.REACT_APP_USE_MOCK_SESSION === 'true'});
   
   const contractProgress: ContractProgress = contract.Coding.problemsToSolveByCategory;
@@ -173,6 +179,7 @@ export default function App() {
               <Button className="mobile-categoryList" onClick={() => setOpenCategory(true)}>&gt;</Button>
               <Drawer open={openCategory} onClose={() => setOpenCategory(false)} sx={{ flex: 1, width: 300, overflowY: 'auto',}} className="mobile-categoryList">
                 <CategoryList
+                  problems={problems}
                   searchedProblems={searchedProblems}
                   activeCategory={activeCategory}
                   onSelectCategory={handleSelectedCategory}
@@ -182,6 +189,7 @@ export default function App() {
               </Drawer>
               <Box sx={{ flex: 1, width: 300, overflowY: 'auto',}} className="categoryList">
                 <CategoryList
+                  problems={problems}
                   searchedProblems={searchedProblems}
                   activeCategory={activeCategory}
                   onSelectCategory={handleSelectedCategory}
@@ -191,6 +199,7 @@ export default function App() {
               </Box>
               <Box sx={{ flex: 3}} className="parent-problemList">
                 <ProblemList
+                  problems={problems}
                   selectedTab={selectedTab}
                   setSelectedTab={setSelectedTab}
                   searchedProblems={searchedProblems}
@@ -251,7 +260,7 @@ export default function App() {
         </Stack>
         
         <Box width="100%" height="100%">
-          <Outlet context={{ setActiveProblem, session, isAdmin, featureMap }} />
+          <Outlet context={{ setActiveProblem, session, isAdmin, featureMap, problems }} />
         </Box>
         
       </Stack>

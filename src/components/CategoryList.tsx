@@ -8,6 +8,11 @@ import CategoryLock from '../utils/CategoryLock';
 import CategoryListItems from './CategoryListItem';
 
 export interface CategoryListProps {
+    /**
+     * The full configured problem set. Distinct from `searchedProblems`: the
+     * per-category totals must not shrink as the user types in the search box.
+     */
+    problems: Problem[];
     searchedProblems: Problem[];
     activeCategory: string | null;
     onSelectCategory: (cat: string) => void;
@@ -16,6 +21,7 @@ export interface CategoryListProps {
 }
 
 export default function CategoryList({
+    problems,
     searchedProblems,
     activeCategory,
     onSelectCategory,
@@ -54,13 +60,13 @@ export default function CategoryList({
                 setError(error.message);
             }
 
-            const summary = getCompletedProblems(submissions || []);
+            const summary = getCompletedProblems(problems, submissions || []);
 
             setProgress(summary);
         }
 
         fetchProgress();
-    }, [session])
+    }, [session, problems])
 
     const categoryLock = useMemo(() => new CategoryLock(progress), [progress]);
 

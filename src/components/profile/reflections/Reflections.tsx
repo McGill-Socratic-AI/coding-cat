@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useMemo, useState } from "react";
-import { Reflection } from "../../../types";
+import { useOutletContext } from "react-router-dom";
+import { Problem, Reflection } from "../../../types";
 import { capitalizeString } from "../../../utils/capitalizeString";
 import { Box, Card, CardContent, Option, Select, Stack, Typography } from "@mui/joy";
 import { getCategoryList } from "../../../utils/getCategoryList";
@@ -93,7 +94,10 @@ interface SearchProps {
 }
 
 function ReflectionTitle({ query, setQuery, category, setCategory }: SearchProps) {
-  const categories = useMemo(() => getCategoryList(), []);
+  // The problem set the app actually loaded, provided by the root route. Read
+  // from context rather than imported so REACT_APP_PROBLEM_SET is honoured.
+  const { problems } = useOutletContext<{ problems: Problem[] }>();
+  const categories = useMemo(() => getCategoryList(problems ?? []), [problems]);
 
   return (
     <Stack width="90%" direction="row" justifyContent="space-between" alignItems="center">

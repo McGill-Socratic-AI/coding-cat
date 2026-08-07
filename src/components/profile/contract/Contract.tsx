@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
-import { BLANK_CONTRACT, ContractData } from "../../../types";
+import { blankContract, ContractData, Problem } from "../../../types";
+import { getCategoryList } from "../../../utils/getCategoryList";
 import { IconButton, Modal, ModalClose, ModalDialog, Stack, Typography } from "@mui/joy";
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import ContractEdit from "./ContractEdit";
@@ -9,13 +10,18 @@ import { Session } from "@supabase/supabase-js";
 import { useOutletContext } from "react-router-dom";
 
 export default function Contract() {
+  const { session, problems } = useOutletContext<{
+    session: Session | null;
+    problems: Problem[];
+  }>();
+
   const [open, setOpen] = useState(false);
-  const [contract, setContract] = useState<ContractData>(BLANK_CONTRACT);
+  const [contract, setContract] = useState<ContractData>(
+    () => blankContract(getCategoryList(problems ?? []))
+  );
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [featureMap, setFeatureMap] = useState<Record<string, boolean>>({});
-
-  const { session } = useOutletContext<{ session: Session | null }>();
 
   useEffect(()=> {
     supabase
