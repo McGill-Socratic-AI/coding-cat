@@ -7,6 +7,7 @@ import UserInfo from '../components/profile/UserInfo';
 import Reflections from '../components/profile/reflections/Reflections';
 import Contract from '../components/profile/contract/Contract';
 import ActivityGraph from '../components/profile/progress/ActivityGraph';
+import GradeSelfReport from '../components/profile/grades/GradeSelfReport';
 
 /**
  * The `Account` component handles everything related to the profile page.
@@ -68,6 +69,8 @@ export default function Account({ session }: { session: Session }) {
       <Stack flex={1} alignItems="center" justifyContent="center" gap={5} className="account-wrapper">
         <UserInfo />
         <Contract />
+        {/* Renders nothing unless the GradeSelfReport flag is on. */}
+        <GradeSelfReport />
       </Stack>
       <Stack marginTop={5} flex={2} gap={2} className="progress-wrapper">
         <Stack direction="row" gap={1}>
