@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import useGradeReport from './useGradeReport';
 import { supabase } from '../supabaseClient';
+import { ConsentState, GradeItem } from '../types';
 
 jest.mock('../supabaseClient', () => ({
   supabase: { functions: { invoke: jest.fn() } },
@@ -10,14 +11,19 @@ const mockInvoke = supabase.functions.invoke as jest.MockedFunction<
   typeof supabase.functions.invoke
 >;
 
-const consent = {
+const consent: ConsentState = {
   version: '2026-08-comp204-v1',
   text: 'Consent text.',
   granted: false,
   grantedAt: null,
 };
 
-function okResponse(overrides: Partial<{ consent: typeof consent; grades: object }> = {}) {
+function okResponse(
+  overrides: Partial<{
+    consent: ConsentState;
+    grades: Partial<Record<GradeItem, number>>;
+  }> = {},
+) {
   return {
     data: { ok: true, consent, grades: {}, ...overrides },
     error: null,
