@@ -190,16 +190,34 @@ supabase functions deploy analyze
 supabase functions deploy submit-grades
 ```
 
-## 6. Wire up the COMP204 problem set
+## 6. The COMP204 problem set
 
-```bash
-cd coding-cat
-git submodule add git@github.com:<org>/coding-cat-comp204-problems.git src/comp204-problems
+Already wired, as a third submodule alongside the two upstream ones:
+
+```
+src/public-problems   -> coding-cat-official/coding-cat-public    (public, upstream)
+src/private-problems  -> coding-cat-official/coding-cat-private   (private, no access)
+src/comp204-problems  -> McGill-Socratic-AI/coding-cat-comp204-problems  (private, ours)
 ```
 
-Make the problem repository **private** — it contains reference solutions.
+This follows upstream's own pattern: questions live in their own repository and
+are compiled into the bundle at build time. Upstream does have a Supabase
+backend and still keeps the question bank in the front end, which is a
+reasonable call for read-only content that git can review and CI can validate.
 
-Put the questions in and build them (see `IMPORT_FORMAT.md` in that repo):
+`coding-cat-comp204-problems` is **private** and must stay that way: every
+problem directory keeps the instructor's reference `solution.py` so `io.json` can
+be verified. The build never ships it to the browser and both the validator and
+CI assert that, but it is in git history.
+
+To clone with it:
+
+```bash
+git submodule update --init src/comp204-problems   # needs org access
+```
+
+To add or change questions, see `QUESTIONS.md`, `IMPORT_FORMAT.md` and
+`ED_EXPORT.md` in that repository. In short:
 
 ```bash
 cd src/comp204-problems
@@ -207,6 +225,18 @@ python3 import_questions.py
 python3 validate_problems.py
 python3 verify_problems.py     # runs every solution against its io.json
 ```
+
+### The public fork's CI does not build this set
+
+`.github/workflows/main.yml` skips both private submodules, because this
+repository is a public fork and the job's `GITHUB_TOKEN` cannot read either of
+them. Giving it a credential that could would put the answer key one leaked log
+away from a public repository.
+
+So CI here verifies that the code compiles against the public problem set, and
+nothing more. **Building the COMP204 bundle is the deployment pipeline's job**,
+running under its own identity with access to the private repository. That is
+step 7.
 
 Then, in `coding-cat/.env.local` (and in whatever injects env at build time):
 

@@ -30,7 +30,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: git submodule sync
-      - run: git -c submodule.src/private-problems.update=none submodule update --init --recursive
+      # Two submodules are private and this repository is a public fork, so the
+      # job's GITHUB_TOKEN cannot read either of them. Skipping them keeps the
+      # build honest about what it covers: it compiles the app against the
+      # public problem set only.
+      #
+      # The COMP204 set therefore is NOT built here. It holds the instructor's
+      # reference solutions, and giving this workflow a credential that could
+      # read them would put the answer key one leaked log away from a public
+      # repository. That build belongs in the COMP204 deployment pipeline, which
+      # runs under its own identity. See docs/comp204-deployment.md.
+      - run: |
+          git -c submodule.src/private-problems.update=none \
+              -c submodule.src/comp204-problems.update=none \
+              submodule update --init --recursive
       - run: npm ci
       - run: npm run build
       - uses: actions/upload-artifact@v4

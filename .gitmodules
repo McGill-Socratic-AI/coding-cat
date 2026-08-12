@@ -4,3 +4,6 @@
 [submodule "src/private-problems"]
 	path = src/private-problems
 	url = https://github.com/coding-cat-official/coding-cat-private
+[submodule "src/comp204-problems"]
+	path = src/comp204-problems
+	url = git@github.com:McGill-Socratic-AI/coding-cat-comp204-problems.git
