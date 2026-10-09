@@ -37,8 +37,8 @@ test('under a fresh review only the follow-ups asked since that review are liste
     followUp={{ status: 'idle' }}
     onFollowUp={() => {}}
   />);
-  expect(screen.queryByText('new question')).not.toBeNull();
-  expect(screen.queryByText('new answer')).not.toBeNull();
+  expect(screen.getByText('new question')).not.toBeNull();
+  expect(screen.getByText('new answer')).not.toBeNull();
   expect(screen.queryByText('old question')).toBeNull();
   expect(screen.queryByText('old answer')).toBeNull();
 });
@@ -51,8 +51,8 @@ test('a re-opened conversation shows the latest review and its follow-ups only',
     followUp={{ status: 'idle' }}
     onFollowUp={() => {}}
   />);
-  expect(screen.queryByText('second review request')).not.toBeNull();
-  expect(screen.queryByText('new question')).not.toBeNull();
+  expect(screen.getByText('second review request')).not.toBeNull();
+  expect(screen.getByText('new question')).not.toBeNull();
   expect(screen.queryByText('first review request')).toBeNull();
   expect(screen.queryByText('old question')).toBeNull();
 });

@@ -91,10 +91,10 @@ function errorResponse(body: Record<string, unknown>, status: number) {
 // Runs the first review so a conversation exists to follow up on.
 async function withAnalyzedThread(t: AnalyzeThread = thread()) {
   mockInvoke.mockResolvedValueOnce(okResponse({ thread: t }));
-  const hook = renderHook(() => useAnalyze(problem));
-  await act(async () => { await hook.result.current.run(request); });
-  await waitFor(() => expect(hook.result.current.thread).not.toBeNull());
-  return hook;
+  const view = renderHook(() => useAnalyze(problem));
+  await act(async () => { await view.result.current.run(request); });
+  await waitFor(() => expect(view.result.current.thread).not.toBeNull());
+  return view;
 }
 
 beforeEach(() => {

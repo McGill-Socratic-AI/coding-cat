@@ -22,7 +22,7 @@ import {
 } from "./thread.ts";
 
 // Length caps — defense against authenticated users sending oversized
-// payloads (storage + Anthropic token cost).
+// payloads (storage + Socratic API token cost).
 const MAX_CODE_LEN = 50_000;
 const MAX_PROBLEM_NAME_LEN = 200;
 
