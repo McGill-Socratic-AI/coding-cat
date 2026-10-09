@@ -22,7 +22,8 @@ import cursedCat from '../assets/cUrSed.png';
 import SolutionCode from '../components/SolutionCode';
 import { getColumnStatuses } from '../utils/mapMutantResults';
 import AnalysisPanel from '../components/AnalysisPanel';
-import {Usage, AnalyzeError} from '../types'
+import {Usage, AnalyzeError, AnalyzeThread, AnalyzeRequest} from '../types'
+import type { FollowUpState } from '../hooks/useAnalyse';
 
 // Emoji rendered in the report
 const TEST_CASE_PASSED = '✅';
@@ -203,8 +204,10 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
     ? getColumnStatuses(evalResponse)
     : undefined;
 
-    const {state, run} = useAnalyze(problem);
-    const onAnalyze = () => run({
+    const {state, run, thread, followUp, askFollowUp} = useAnalyze(problem, session);
+    // Built fresh on every call so each turn — review or follow-up — is about
+    // the code and test results currently on screen.
+    const analyzeBody = (): AnalyzeRequest => ({
     meta: problem.meta,
     description: problem.description,
     io: problem.io,
@@ -219,7 +222,9 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
         error: r.error?.ob_type?.tp_name === "NoneType"? null: r.error,
       }))
     : [],
-    }); 
+    });
+    const onAnalyze = () => run(analyzeBody());
+    const onFollowUp = (message: string) => askFollowUp(analyzeBody(), message);
 
     return (
       <Stack sx={{ width: "100%", p: 3 }} className="problem-container" direction="row" spacing={2}  justifyContent="center">
@@ -275,7 +280,7 @@ function ProblemIDE({ problem }: ProblemIDEProps) {
                 {session && featureMap['AIAnalysis'] === true && <Box sx={{ border: 2, borderRadius: 10}} >
                   <Stack direction="column">
                     <Typography sx={{ p: 2, borderBottom: 2,}} level="h4"> AI Analysis </Typography>
-                    {evalResponse ? (<AIReport state={state} onAnalyze={onAnalyze} evalResponse={evalResponse} /> ) : 
+                    {evalResponse ? (<AIReport state={state} onAnalyze={onAnalyze} evalResponse={evalResponse} thread={thread} followUp={followUp} onFollowUp={onFollowUp} /> ) : 
                     <Stack direction="column" alignItems="center" justifyContent="center" spacing={1} sx={{ py: 5, px: 3, minHeight: 40,}}>
                           <Typography> Run your code to generate an AI analysis. </Typography>
                     </Stack>}
@@ -408,8 +413,11 @@ interface AIReportProps {
   evalResponse: EvalResponse | null
   state: State;
   onAnalyze: () => void | Promise<void>;
+  thread: AnalyzeThread | null;
+  followUp: FollowUpState;
+  onFollowUp: (message: string) => void | Promise<void>;
 }
-function AIReport({evalResponse, state, onAnalyze}:AIReportProps) {
+function AIReport({evalResponse, state, onAnalyze, thread, followUp, onFollowUp}:AIReportProps) {
   if (null == evalResponse) return null;
   if ('failure' === evalResponse.status) {
     return (
@@ -418,6 +426,6 @@ function AIReport({evalResponse, state, onAnalyze}:AIReportProps) {
       </Stack>
     )
   }
-  if (`success` === evalResponse.status) return <AnalysisPanel state={state} onAnalyze={onAnalyze}></AnalysisPanel>
+  if (`success` === evalResponse.status) return <AnalysisPanel state={state} onAnalyze={onAnalyze} thread={thread} followUp={followUp} onFollowUp={onFollowUp}></AnalysisPanel>
   return <p> If this text appears, it&apos;s a bug :^) </p>;
 }

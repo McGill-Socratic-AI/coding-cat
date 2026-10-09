@@ -79,9 +79,9 @@ brew install deno   # for local function tests
 One-time setup (per developer):
 
 ```bash
-supabase login                                # interactive (browser)
-supabase link --project-ref <prod_or_staging> # interactive (db password)
-supabase secrets set ANTHROPIC_API_KEY=sk-... # function secret
+supabase login                                     # interactive (browser)
+supabase link --project-ref <prod_or_staging>      # interactive (db password)
+supabase secrets set SOCRATIC_PLATFORM_KEY=...     # function secret
 ```
 
 Local dev (runs the function on `http://localhost:54321/functions/v1/<name>`):
@@ -104,4 +104,16 @@ cd supabase/functions/<name>
 deno test --allow-env --allow-net
 ```
 
-The `analyze` function (AI Analysis feature) requires `ANTHROPIC_API_KEY` and is gated by the `AIAnalysis` row in the existing `activated` table — defaults OFF. 
+### AI Analysis
+
+The `analyze` function is gated by the `AIAnalysis` row in the existing `activated` table — defaults OFF — and is hidden from signed-out visitors.
+
+It does not call an LLM itself: it forwards the submission to the Socratic API (`supabase/functions/analyze/socratic.ts`), which owns the prompt and the conversation history. Secrets stay server-side:
+
+| Secret / env var           | Required | Purpose                                                    |
+| -------------------------- | -------- | ---------------------------------------------------------- |
+| `SOCRATIC_PLATFORM_KEY`    | yes      | Platform bearer token for the Socratic API. Never reaches the browser. |
+| `SOCRATIC_URL`             | no       | Override the Socratic endpoint (defaults to the hosted one). |
+| `SOCRATIC_COURSE_OFFERING` | no       | Course offering id sent with every call.                   |
+
+**Follow-up conversations.** After the first review a signed-in student can ask follow-up questions about the same submission. A thread is one conversation per (user, problem), stored in `analyze_threads` / `analyze_messages` (see `supabase/migrations/20261009000000_analyze_threads.sql`); RLS lets a student reach only their own. The earlier exchange is carried by `analyze_threads.socratic_session_id` — the Socratic API keeps the authoritative turn history and replays it into the prompt, so the transcript never travels in our request. Reviews keep the existing daily (20) and per-problem (5) caps from `analyze_calls`; follow-ups have their own budget (`thread.ts`: 10 per conversation, 30 per day, 2000 characters per question) so asking questions never consumes a student's review budget. 

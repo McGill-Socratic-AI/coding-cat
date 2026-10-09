@@ -1,7 +1,9 @@
 import { Stack, Button, Box, Typography, Checkbox } from "@mui/joy";
 import { useState } from "react";
-import {Usage, AnalyzeError} from '../types';
+import {Usage, AnalyzeError, AnalyzeThread} from '../types';
 import Markdown from "markdown-to-jsx";
+import AnalysisThread from "./AnalysisThread";
+import type { FollowUpState } from "../hooks/useAnalyse";
 
 type State =
   | { status: 'idle' }
@@ -12,10 +14,13 @@ type State =
 type AnalysisPanelProps = {
   state: State;
   onAnalyze: () => void | Promise<void>;
+  thread?: AnalyzeThread | null;
+  followUp?: FollowUpState;
+  onFollowUp?: (message: string) => void | Promise<void>;
 }
 
 
-export default function AnalysisPanel({state, onAnalyze}:AnalysisPanelProps){
+export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFollowUp}:AnalysisPanelProps){
     const [acknowledged, setAcknowledged] = useState(() => {
         return localStorage.getItem("aiAnalysisAck") === "true";
     });
@@ -28,6 +33,16 @@ export default function AnalysisPanel({state, onAnalyze}:AnalysisPanelProps){
             localStorage.removeItem("aiAnalysisAck");
         }
     };
+
+    // The box above already shows this run's review, so the thread only adds the
+    // follow-up turns. With no fresh review on screen — a reload, say — the
+    // thread shows the stored conversation in full so nothing is lost.
+    const showingFreshReview = state.status === 'success';
+    const threadMessages = thread
+        ? (showingFreshReview ? thread.messages.filter(m => m.source === 'followup') : thread.messages)
+        : [];
+    const canConverse = acknowledged && thread && followUp && onFollowUp;
+
     return (
         <Stack spacing={3} sx={{ p: 3 }}>
 
@@ -38,7 +53,7 @@ export default function AnalysisPanel({state, onAnalyze}:AnalysisPanelProps){
             label="I understand that my code and the AI response may be stored to improve this feature."
           />
         </Box>
-        
+
         {acknowledged && (['idle', 'success'].includes(state.status) ? (
           <Button size="lg" onClick={onAnalyze}>
             Generate Analysis
@@ -46,13 +61,13 @@ export default function AnalysisPanel({state, onAnalyze}:AnalysisPanelProps){
         ): state.status === 'loading' && <Typography sx={{ textAlign: "center", fontStyle: "italic",}}>
             Loading...
             </Typography>)}
-        
-        {state.status === 'success' && <Box sx={{ mt: 2, p: 2, borderRadius: 3, border: "1.5px solid", borderColor: "primary.500", backgroundColor: "primary.50", 
+
+        {state.status === 'success' && <Box sx={{ mt: 2, p: 2, borderRadius: 3, border: "1.5px solid", borderColor: "primary.500", backgroundColor: "primary.50",
             width: "100%", minHeight: 40, height: "fit-content",}}>
             <Typography level="title-md" sx={{ mb: 1, textAlign: "center", whiteSpace: "nowrap",fontStyle: "italic"}}>
                 {state.usage.dailyUsed}/20 AI analyses used today, {state.usage.problemUsed}/5 used today on this problem.
             </Typography>
-            <Markdown>{state.analysis}</Markdown> 
+            <Markdown>{state.analysis}</Markdown>
 
         </Box> }
 
@@ -64,5 +79,14 @@ export default function AnalysisPanel({state, onAnalyze}:AnalysisPanelProps){
                 <Button size="md" onClick={onAnalyze}> Try Again </Button>
                 </Box>}
             </Box>}
+
+        {canConverse && <AnalysisThread
+            thread={thread}
+            messages={threadMessages}
+            heading={showingFreshReview ? "Follow-up questions" : "Your earlier conversation"}
+            followUp={followUp}
+            onFollowUp={onFollowUp}
+            busy={state.status === 'loading'}
+          />}
       </Stack>)
 }

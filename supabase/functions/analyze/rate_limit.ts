@@ -54,6 +54,26 @@ export async function checkLimits(
   userId: string,
   problemName: string,
 ): Promise<LimitResult> {
+  const usage = await readUsage(client, userId, problemName);
+
+  if (usage.dailyUsed >= DAILY_CAP) {
+    return { allowed: false, kind: "daily", usage, retryAt: nextUtcMidnightISO() };
+  }
+  if (usage.problemUsed >= PROBLEM_CAP) {
+    return { allowed: false, kind: "problem", usage, retryAt: nextUtcMidnightISO() };
+  }
+  return { allowed: true, usage };
+}
+
+// The review counters shown in the panel. Split out of checkLimits because the
+// follow-up path reports them without re-checking the review caps — follow-ups
+// have their own budget (see thread.ts) and must not consume a student's
+// remaining reviews for the problem.
+export async function readUsage(
+  client: SupabaseClient,
+  userId: string,
+  problemName: string,
+): Promise<Usage> {
   const todayStart = todayUtcStartISO();
 
   const { count: dailyCount, error: dailyError } = await client
@@ -77,16 +97,8 @@ export async function checkLimits(
     console.error("[rate_limit] per-problem count query failed (failing open):", problemError);
   }
 
-  const usage: Usage = {
+  return {
     dailyUsed: dailyCount ?? 0,
     problemUsed: problemCount ?? 0,
   };
-
-  if (usage.dailyUsed >= DAILY_CAP) {
-    return { allowed: false, kind: "daily", usage, retryAt: nextUtcMidnightISO() };
-  }
-  if (usage.problemUsed >= PROBLEM_CAP) {
-    return { allowed: false, kind: "problem", usage, retryAt: nextUtcMidnightISO() };
-  }
-  return { allowed: true, usage };
 }
