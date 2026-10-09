@@ -61,6 +61,10 @@ function fakeClient(respond: (op: Op, index: number) => Answer) {
         op.filters.push(["eq", c, v]);
         return b;
       },
+      gt(c: string, v: unknown) {
+        op.filters.push(["gt", c, v]);
+        return b;
+      },
       gte(c: string, v: unknown) {
         op.filters.push(["gte", c, v]);
         return b;
@@ -117,6 +121,39 @@ function fakeClient(respond: (op: Op, index: number) => Answer) {
       };
     },
   };
+}
+
+// An in-memory analyze_messages table behind the fake client: inserts land in
+// `rows`, and selects apply the eq/gt filters, ordering and limit the module
+// built, so a sequence of calls behaves like the real table.
+function memoryMessages() {
+  const rows: Array<Record<string, unknown>> = [];
+  let nextId = 1;
+  const client = fakeClient((op) => {
+    if (op.table !== "analyze_messages") return { data: null, error: null };
+    if (op.op === "insert") {
+      for (const r of op.payload as Array<Record<string, unknown>>) {
+        rows.push({ id: nextId++, created_at: "2026-10-09T00:00:00.000Z", ...r });
+      }
+      return { data: null, error: null };
+    }
+    let hit = rows.filter((r) =>
+      op.filters.every(([kind, c, v]) =>
+        kind === "eq" ? r[c] === v : kind === "gt" ? (r[c] as number) > (v as number) : true
+      )
+    );
+    if (op.order) {
+      const { column, ascending } = op.order;
+      hit = [...hit].sort((a, b) =>
+        ((a[column] as number) - (b[column] as number)) * (ascending ? 1 : -1)
+      );
+    }
+    if (op.limit !== undefined) hit = hit.slice(0, op.limit);
+    if (op.options?.head) return { count: hit.length, error: null };
+    if (op.terminal === "maybeSingle") return { data: hit[0] ?? null, error: null };
+    return { data: hit, error: null };
+  });
+  return { client, rows };
 }
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -232,17 +269,59 @@ Deno.test("gateFollowUp reports the turn cap before the daily budget", () => {
 });
 
 Deno.test("countThreadFollowUps counts only the student's follow-up turns", async () => {
-  const client = fakeClient(() => ({ count: 4, error: null }));
-  const n = await countThreadFollowUps(client as any, THREAD_ID);
-  assertEquals(n, 4);
-
-  const op = client.ops[0];
-  assertEquals(op.table, "analyze_messages");
-  assertEquals(op.options?.head, true);
-  assertEquals(filterValue(op, "thread_id"), THREAD_ID);
+  const { client } = memoryMessages();
+  const turn = (source: "review" | "followup", q: string) =>
+    appendTurn(client as any, {
+      threadId: THREAD_ID,
+      userId: OWNER,
+      source,
+      studentMessage: q,
+      code: "",
+      reply: "?",
+      model: "m",
+      latencyMs: 1,
+    });
+  await turn("review", "review please");
+  await turn("followup", "q1");
+  await turn("followup", "q2");
   // Assistant replies and the review turn must not inflate the follow-up cap.
-  assertEquals(filterValue(op, "role"), "user");
-  assertEquals(filterValue(op, "source"), "followup");
+  assertEquals(await countThreadFollowUps(client as any, THREAD_ID), 2);
+});
+
+Deno.test("a new review starts a fresh follow-up allowance", async () => {
+  const { client } = memoryMessages();
+  const turn = (source: "review" | "followup", q: string) =>
+    appendTurn(client as any, {
+      threadId: THREAD_ID,
+      userId: OWNER,
+      source,
+      studentMessage: q,
+      code: "",
+      reply: "?",
+      model: "m",
+      latencyMs: 1,
+    });
+  const gate = async () =>
+    gateFollowUp({
+      thread: threadRow(),
+      problemName: "two-sum",
+      threadFollowUps: await countThreadFollowUps(client as any, THREAD_ID),
+      dailyFollowUps: 0,
+    });
+
+  await turn("review", "review please");
+  for (let i = 0; i < MAX_FOLLOWUPS_PER_THREAD; i++) await turn("followup", `q${i}`);
+  assertEquals(await gate(), { allowed: false, kind: "turn_limit" });
+  assertEquals((await loadThread(client as any, THREAD_ID)).followUpsUsed, MAX_FOLLOWUPS_PER_THREAD);
+
+  await turn("review", "review my new code");
+  const fresh = await loadThread(client as any, THREAD_ID);
+  assertEquals(fresh.followUpsUsed, 0);
+  assertEquals(await gate(), { allowed: true, thread: threadRow() });
+
+  await turn("followup", "and now?");
+  assertEquals(await countThreadFollowUps(client as any, THREAD_ID), 1);
+  assertEquals((await loadThread(client as any, THREAD_ID)).followUpsUsed, 1);
 });
 
 Deno.test("countDailyFollowUps counts the student's follow-ups since UTC midnight", async () => {
@@ -493,6 +572,20 @@ Deno.test("toAnalyzeThread counts only the student's follow-up turns", () => {
   assertEquals(thread.followUpsLimit, MAX_FOLLOWUPS_PER_THREAD);
   assertEquals(thread.messages[0].id, "0");
   assertEquals(thread.messages[0].turnIndex, 0);
+});
+
+Deno.test("toAnalyzeThread counts only follow-ups since the latest review", () => {
+  const thread = toAnalyzeThread(THREAD_ID, [
+    msg({ id: 0, role: "user", source: "review", content: "review please" }),
+    msg({ id: 1, role: "assistant", source: "review", content: "r1" }),
+    msg({ id: 2, role: "user", source: "followup", content: "old q" }),
+    msg({ id: 3, role: "assistant", source: "followup", content: "old a" }),
+    msg({ id: 4, role: "user", source: "review", content: "review again" }),
+    msg({ id: 5, role: "assistant", source: "review", content: "r2" }),
+  ]);
+  assertEquals(thread.messages.length, 6);
+  assertEquals(thread.followUpsUsed, 0);
+  assertEquals(unsavedTurn(thread, "followup", "new q", "new a").followUpsUsed, 1);
 });
 
 Deno.test("toAnalyzeThread reports a conversation that has reached the cap", () => {

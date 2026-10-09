@@ -2,9 +2,9 @@
 //
 // A thread is one conversation per (user, problem); see the
 // 20261009000000_analyze_threads.sql migration for the schema and the RLS
-// contract. Every function here takes a SERVICE-ROLE client: analyze_threads
-// has no student-side write policy on purpose, so only this function may create
-// a thread or append a tutor reply.
+// contract. Every function here takes a SERVICE-ROLE client: neither table has
+// a student-side write policy on purpose, so only this function may create a
+// thread or append a turn.
 //
 // The transcript stored here is a projection for the UI. The authoritative turn
 // history lives in the Socratic API, keyed by analyze_threads.socratic_session_id.
@@ -12,8 +12,9 @@
 import type { SupabaseClient } from "supabase";
 import type { AnalyzeThread, ThreadMessage } from "./types.ts";
 
-// Follow-ups per conversation. Bounds one student's single thread: cost,
-// prompt growth upstream, and the length of the panel.
+// Follow-ups per conversation, where a conversation is everything since the
+// thread's latest review: generating a new analysis starts a fresh allowance.
+// Bounds cost, prompt growth upstream, and the length of the panel.
 export const MAX_FOLLOWUPS_PER_THREAD = 10;
 
 // Follow-ups per student per UTC day, across every problem. The cost guard —
@@ -107,16 +108,32 @@ export async function findOwnedThread(
   return row;
 }
 
+// Follow-ups asked since the thread's latest review — the same boundary
+// currentConversation draws for toAnalyzeThread, so the cap the server enforces
+// and the count the panel shows cannot disagree.
 export async function countThreadFollowUps(
   client: SupabaseClient,
   threadId: string,
 ): Promise<number> {
-  const { count, error } = await client
+  const { data: latest, error: latestError } = await client
+    .from("analyze_messages")
+    .select("turn_index")
+    .eq("thread_id", threadId)
+    .eq("source", "review")
+    .order("turn_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestError) throw latestError;
+  const reviewTurn = (latest as { turn_index: number } | null)?.turn_index;
+
+  let query = client
     .from("analyze_messages")
     .select("id", { count: "exact", head: true })
     .eq("thread_id", threadId)
     .eq("role", "user")
     .eq("source", "followup");
+  if (typeof reviewTurn === "number") query = query.gt("turn_index", reviewTurn);
+  const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;
 }
@@ -228,6 +245,25 @@ export interface MessageRow {
   created_at: string;
 }
 
+// The turns from the latest review onwards: the conversation the student is in
+// now. Earlier reviews and their follow-ups stay stored but are about older code.
+export function currentConversation<
+  T extends { role: "user" | "assistant"; source: "review" | "followup" },
+>(messages: T[]): T[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].source === "review" && messages[i].role === "user") {
+      return messages.slice(i);
+    }
+  }
+  return messages;
+}
+
+function countFollowUps(messages: ThreadMessage[]): number {
+  return currentConversation(messages).filter(
+    (m) => m.role === "user" && m.source === "followup",
+  ).length;
+}
+
 export function toAnalyzeThread(
   threadId: string,
   rows: MessageRow[],
@@ -243,9 +279,7 @@ export function toAnalyzeThread(
   return {
     threadId,
     messages,
-    followUpsUsed: messages.filter(
-      (m) => m.role === "user" && m.source === "followup",
-    ).length,
+    followUpsUsed: countFollowUps(messages),
     followUpsLimit: MAX_FOLLOWUPS_PER_THREAD,
   };
 }
@@ -368,8 +402,6 @@ export function unsavedTurn(
   return {
     ...thread,
     messages,
-    followUpsUsed: messages.filter(
-      (m) => m.role === "user" && m.source === "followup",
-    ).length,
+    followUpsUsed: countFollowUps(messages),
   };
 }

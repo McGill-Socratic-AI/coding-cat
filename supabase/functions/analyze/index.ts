@@ -137,8 +137,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     followUpThreadId = rawFollowUp.threadId;
   }
 
-  // Thread reads and writes need the service-role client: analyze_threads has
-  // no student-side write policy, by design (see the migration and auth.ts).
+  // Thread reads and writes need the service-role client: neither thread table
+  // has a student-side write policy, by design (see the migration and auth.ts).
   const serviceClient = makeServiceClient();
 
   let thread: ThreadRow;

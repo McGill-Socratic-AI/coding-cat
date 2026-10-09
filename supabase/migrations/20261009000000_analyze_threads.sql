@@ -93,25 +93,9 @@ CREATE POLICY analyze_threads_self_select ON analyze_threads
 CREATE POLICY analyze_messages_self_select ON analyze_messages
   FOR SELECT USING (auth.uid() = user_id);
 
--- A student may append their OWN question to their OWN thread, and nothing
--- else: `role` is pinned to 'user' so a tutor reply can never be forged, and
--- the thread must already belong to the caller. The analyze Edge Function
--- currently writes both rows of a turn with its service-role client so the
--- question and its reply land together (see functions/analyze/thread.ts); this
--- policy is the boundary for any student-side write, now or later.
-CREATE POLICY analyze_messages_self_insert ON analyze_messages
-  FOR INSERT WITH CHECK (
-    auth.uid() = user_id
-    AND role = 'user'
-    AND EXISTS (
-      SELECT 1 FROM analyze_threads t
-      WHERE t.id = analyze_messages.thread_id
-        AND t.user_id = auth.uid()
-    )
-  );
-
--- INTENTIONALLY no UPDATE or DELETE policy on either table, and no INSERT
--- policy on analyze_threads: threads are created and advanced by the analyze
--- Edge Function's service-role client (see functions/analyze/auth.ts), so a
--- student cannot rewrite history, re-point a thread at another student's
+-- INTENTIONALLY no INSERT, UPDATE or DELETE policy on either table: threads
+-- and both rows of every turn are written only by the analyze Edge Function's
+-- service-role client (see functions/analyze/auth.ts and thread.ts), which
+-- enforces the length caps and follow-up budgets. A student therefore cannot
+-- forge a turn, rewrite history, re-point a thread at another student's
 -- Socratic session, or manufacture a thread under someone else's user_id.

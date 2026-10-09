@@ -4,6 +4,7 @@ import {Usage, AnalyzeError, AnalyzeThread} from '../types';
 import Markdown from "markdown-to-jsx";
 import AnalysisThread from "./AnalysisThread";
 import type { FollowUpState } from "../hooks/useAnalyse";
+import { currentConversation } from "../utils/analysisThread";
 
 type State =
   | { status: 'idle' }
@@ -34,13 +35,15 @@ export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFol
         }
     };
 
-    // The box above already shows this run's review, so the thread only adds the
-    // follow-up turns. With no fresh review on screen — a reload, say — the
-    // thread shows the stored conversation in full so nothing is lost.
+    // Only the conversation since the latest review: earlier reviews and their
+    // follow-ups were about older code. The box above already shows this run's
+    // review, so the thread then only adds the follow-up turns. With no fresh
+    // review on screen — a reload, say — it shows the latest review as well.
     const showingFreshReview = state.status === 'success';
-    const threadMessages = thread
-        ? (showingFreshReview ? thread.messages.filter(m => m.source === 'followup') : thread.messages)
-        : [];
+    const conversation = thread ? currentConversation(thread.messages) : [];
+    const threadMessages = showingFreshReview
+        ? conversation.filter(m => m.source === 'followup')
+        : conversation;
     const canConverse = acknowledged && thread && followUp && onFollowUp;
 
     return (

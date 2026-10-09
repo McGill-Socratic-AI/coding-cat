@@ -7,9 +7,9 @@ import type { FollowUpState } from '../hooks/useAnalyse';
 
 type AnalysisThreadProps = {
   thread: AnalyzeThread;
-  // Which turns to render. The panel passes only the follow-up turns when the
-  // review reply is already shown above, and the whole conversation when it is
-  // re-opening a stored thread.
+  // Which turns to render. The panel passes only the follow-up turns since the
+  // latest review when that review is already shown above, and the latest
+  // review with its follow-ups when it is re-opening a stored thread.
   messages: ThreadMessage[];
   heading: string;
   followUp: FollowUpState;

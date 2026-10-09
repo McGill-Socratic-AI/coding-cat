@@ -323,3 +323,32 @@ test('a student with no stored conversation starts empty', async () => {
   expect(mockFrom).not.toHaveBeenCalledWith('analyze_messages');
   expect(result.current.thread).toBeNull();
 });
+
+test('a stored conversation re-opened after a new review starts a fresh follow-up allowance', async () => {
+  const rows: any[] = [
+    { id: 0, role: 'user', source: 'review', content: 'Requested an analysis of my code.', turn_index: 0, created_at: NOW },
+    { id: 1, role: 'assistant', source: 'review', content: 'What does line 2 do?', turn_index: 1, created_at: NOW },
+  ];
+  for (let i = 0; i < MAX_FOLLOWUPS_PER_THREAD; i++) {
+    const t = rows.length;
+    rows.push({ id: t, role: 'user', source: 'followup', content: `q${i}`, turn_index: t, created_at: NOW });
+    rows.push({ id: t + 1, role: 'assistant', source: 'followup', content: `a${i}`, turn_index: t + 1, created_at: NOW });
+  }
+  const t = rows.length;
+  rows.push({ id: t, role: 'user', source: 'review', content: 'Requested an analysis of my code.', turn_index: t, created_at: NOW });
+  rows.push({ id: t + 1, role: 'assistant', source: 'review', content: 'And now?', turn_index: t + 1, created_at: NOW });
+  mockTable({
+    analyze_threads: { data: { id: THREAD_ID }, error: null },
+    analyze_messages: { data: rows, error: null },
+  });
+
+  const session = { user: { id: 'u1' } } as unknown as Session;
+  const { result } = renderHook(() => useAnalyze(problem, session));
+  await waitFor(() => expect(result.current.thread).not.toBeNull());
+  expect(result.current.thread?.followUpsUsed).toBe(0);
+
+  mockInvoke.mockResolvedValueOnce(okResponse({ thread: thread({ followUpsUsed: 1 }) }));
+  await act(async () => { await result.current.askFollowUp(request, 'why?'); });
+  expect(mockInvoke).toHaveBeenCalledTimes(1);
+  expect(result.current.followUp.status).toBe('idle');
+});

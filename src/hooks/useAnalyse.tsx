@@ -11,6 +11,7 @@ import {
   Usage,
 } from '../types';
 import { MAX_FOLLOWUP_LEN, MAX_FOLLOWUPS_PER_THREAD } from '../utils/analysisLimits';
+import { countFollowUps } from '../utils/analysisThread';
 
 type State =
   | { status: 'idle' }
@@ -47,7 +48,7 @@ function mockThread(threadId: string, messages: ThreadMessage[]): AnalyzeThread 
   return {
     threadId,
     messages,
-    followUpsUsed: messages.filter(m => m.role === 'user' && m.source === 'followup').length,
+    followUpsUsed: countFollowUps(messages),
     followUpsLimit: MAX_FOLLOWUPS_PER_THREAD,
   };
 }
@@ -119,7 +120,7 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
       setThread(prev => prev ?? {
         threadId: threadRow.id,
         messages,
-        followUpsUsed: messages.filter(m => m.role === 'user' && m.source === 'followup').length,
+        followUpsUsed: countFollowUps(messages),
         followUpsLimit: MAX_FOLLOWUPS_PER_THREAD,
       });
     })();
