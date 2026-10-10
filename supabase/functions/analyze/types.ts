@@ -6,7 +6,7 @@
 //
 //   Analyze-specific half (single source of truth — copy into FE if needed):
 //     - AnalyzeRequest, AnalyzeSuccess, AnalyzeError, AnalyzeResponse,
-//       AnalyzeKind, Usage
+//       AnalyzeKind, Usage, FollowUp, ThreadMessage, AnalyzeThread
 //
 // Note: Report.error?: string | null is added here for future-proofing
 // (worker.py emits it). The FE Report shape may not have it yet — that
@@ -34,6 +34,15 @@ export interface Report {
   error?: string | null;
 }
 
+// Present only on a follow-up call: continue the conversation identified by
+// threadId instead of generating a fresh review. The transcript itself is NOT
+// sent — the Socratic API owns the turn history and we hand it the stored
+// session id (see socratic.ts).
+export interface FollowUp {
+  threadId: string;
+  message: string;
+}
+
 export interface AnalyzeRequest {
   meta: ProblemMeta;
   description: string;
@@ -41,11 +50,33 @@ export interface AnalyzeRequest {
   starter: string;
   code: string;
   testReport: Report[];
+  followUp?: FollowUp;
 }
 
 export interface Usage {
   dailyUsed: number;
   problemUsed: number;
+}
+
+export type ThreadRole = "user" | "assistant";
+export type ThreadSource = "review" | "followup";
+
+export interface ThreadMessage {
+  id: string;
+  role: ThreadRole;
+  source: ThreadSource;
+  content: string;
+  turnIndex: number;
+  createdAt: string;
+}
+
+// The whole conversation for one (user, problem), returned on every successful
+// analyze call so the panel can render it without a second round trip.
+export interface AnalyzeThread {
+  threadId: string;
+  messages: ThreadMessage[];
+  followUpsUsed: number;
+  followUpsLimit: number;
 }
 
 export type AnalyzeKind =
@@ -54,12 +85,15 @@ export type AnalyzeKind =
   | "flag_off"
   | "upstream"
   | "invalid_input"
+  | "turn_limit"
+  | "thread_not_found"
   | "unknown";
 
 export interface AnalyzeSuccess {
   ok: true;
   analysis: string;
   usage: Usage;
+  thread: AnalyzeThread;
 }
 
 export interface AnalyzeError {

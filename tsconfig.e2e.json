@@ -1,0 +1,16 @@
+{
+  "// note": "Separate from tsconfig.json because react-scripts owns that file and rewrites it; it also only includes src/. Playwright runs these files in Node, so they need CommonJS/node settings rather than the browser bundle's.",
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "dom"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

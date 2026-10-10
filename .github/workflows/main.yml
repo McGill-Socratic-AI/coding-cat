@@ -23,6 +23,31 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm ci
       - run: npm run test
+  e2e:
+    name: Run end-to-end tests
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule sync
+      # The problem set is a submodule reached through the src/problems symlink,
+      # and src/problems/problems.js is generated from it by build-problems.
+      - run: git -c submodule.src/private-problems.update=none submodule update --init --recursive
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The e2e build points the app at a Supabase URL nothing listens on;
+      # e2e/mockBackend.ts fulfils every request in the browser, so this job
+      # needs no Supabase project, no secrets and spends no Socratic calls.
+      - run: npm run typecheck:e2e
+      - run: npm run build:e2e
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   build:
     name: Build problem list and static files
     needs: test

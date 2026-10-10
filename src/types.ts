@@ -37,6 +37,13 @@ export interface Problem {
 }
 export type Usage = { dailyUsed: number; problemUsed: number };
 
+// Present only on a follow-up call: continue the conversation identified by
+// threadId instead of generating a fresh review.
+export type FollowUp = {
+  threadId: string;
+  message: string;
+};
+
 export type AnalyzeRequest = {
   meta: ProblemMeta;
   description: string;
@@ -44,12 +51,37 @@ export type AnalyzeRequest = {
   starter: string;
   code: string;
   testReport: Report[];
+  followUp?: FollowUp;
 };
 
-export type AnalyzeSuccess = { ok: true; analysis: string; usage: Usage };
+// The follow-up limits live in src/utils/analysisLimits.ts, not here: this
+// module has a runtime dependency on the generated src/problems/problems.js
+// (via getCategoryList), so a runtime import from here breaks Jest runs that
+// have not built the problem set.
+
+export type ThreadRole = 'user' | 'assistant';
+export type ThreadSource = 'review' | 'followup';
+
+export type ThreadMessage = {
+  id: string;
+  role: ThreadRole;
+  source: ThreadSource;
+  content: string;
+  turnIndex: number;
+  createdAt: string;
+};
+
+export type AnalyzeThread = {
+  threadId: string;
+  messages: ThreadMessage[];
+  followUpsUsed: number;
+  followUpsLimit: number;
+};
+
+export type AnalyzeSuccess = { ok: true; analysis: string; usage: Usage; thread: AnalyzeThread };
 export type AnalyzeError = {
   ok: false;
-  kind: 'rate_limit' | 'auth' | 'flag_off' | 'upstream' | 'invalid_input' | 'unknown';
+  kind: 'rate_limit' | 'auth' | 'flag_off' | 'upstream' | 'invalid_input' | 'turn_limit' | 'thread_not_found' | 'unknown';
   message: string;
   retryAt?: string;
   usage?: Usage;

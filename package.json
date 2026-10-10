@@ -35,6 +35,9 @@
     "build-problems": "node scripts/build-problems.js",
     "build": "npm run build-problems && react-scripts build",
     "test": "react-scripts test",
+    "build:e2e": "npm run build-problems && REACT_APP_SUPABASE_URL=http://localhost:54321 REACT_APP_SUPABASE_ANON_KEY=e2e-anon-key react-scripts build",
+    "test:e2e": "playwright test",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "deploy": "rsync -r build/ codingcat@jerrington.me:/srv/http/coding-cat/",
     "deploy-exam": "rsync -r build/ codingcat@jerrington.me:/srv/http/exam-coding-cat/",
     "deploy:functions": "supabase functions deploy",
@@ -44,6 +47,16 @@
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "e2e/**"
+        ],
+        "rules": {
+          "testing-library/prefer-screen-queries": "off"
+        }
+      }
     ]
   },
   "browserslist": {
@@ -57,5 +70,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "serve": "^14.2.4"
   }
 }

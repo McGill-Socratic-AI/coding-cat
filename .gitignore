@@ -24,3 +24,9 @@ yarn-error.log*
 
 # editor config (per-developer, not version-controlled)
 .vscode/
+
+# end-to-end test output (Playwright)
+/playwright-report
+/test-results
+/blob-report
+/playwright/.cache
