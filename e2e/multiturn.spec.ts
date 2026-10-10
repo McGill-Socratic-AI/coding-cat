@@ -230,6 +230,39 @@ test.describe('AI Analysis follow-up conversation', () => {
     await expect(followUpBox(page)).toBeVisible();
   });
 
+  test('a new analysis cannot start while a follow-up is awaiting its reply', async ({ page }) => {
+    const analyze = new FakeAnalyze();
+    await reviewed(page, analyze);
+
+    const release = analyze.holdNext();
+    await askFollowUp(page, 'still thinking about this one');
+    await expect(page.getByText('Thinking...')).toBeVisible();
+    const generate = aiPanel(page).getByRole('button', { name: /generate analysis/i });
+    await expect(generate).toBeDisabled();
+
+    release();
+    await expect(page.getByText(/Tutor reply 1:/)).toBeVisible();
+    await expect(generate).toBeEnabled();
+    // Only the review and the follow-up reached the backend: no overlapping review.
+    expect(analyze.requests.map(r => !!r.followUp)).toEqual([false, true]);
+  });
+
+  test('a stored conversation with no review offers no follow-up', async ({ page }) => {
+    // What a first review that failed upstream leaves behind: an empty thread.
+    const analyze = new FakeAnalyze();
+    await installMockBackend(page, {
+      analyze,
+      storedThread: { threadId: THREAD_ID, rows: [] },
+    });
+
+    await page.goto(PROBLEM_URL);
+    await runCode(page);
+    await acknowledgeDisclosure(page);
+
+    await expect(followUpBox(page)).toHaveCount(0);
+    await expect(page.getByText(/follow-up questions used/)).toHaveCount(0);
+  });
+
   test('a signed-out visitor never sees the conversation', async ({ page }) => {
     const analyze = new FakeAnalyze();
     await installMockBackend(page, { analyze, signedIn: false });

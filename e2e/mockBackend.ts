@@ -58,6 +58,7 @@ export class FakeAnalyze {
   forceFollowUpsUsed: number | null = null;
   /** Fail the next call with this status/body, once. */
   private failNext: { status: number; body: unknown } | null = null;
+  private held: Promise<void> | null = null;
 
   private reviewCount = 0;
   private followUpCount = 0;
@@ -69,6 +70,20 @@ export class FakeAnalyze {
 
   failOnce(status: number, body: unknown) {
     this.failNext = { status, body };
+  }
+
+  /** Hold the next call's response until the returned function is called. */
+  holdNext(): () => void {
+    let release!: () => void;
+    this.held = new Promise(r => { release = r; });
+    return release;
+  }
+
+  async respond(body: AnalyzeBody): Promise<{ status: number; json: unknown }> {
+    const held = this.held;
+    this.held = null;
+    if (held) await held;
+    return this.handle(body);
   }
 
   /** Turns since the latest review — the conversation the student is in now. */
@@ -259,7 +274,7 @@ export async function installMockBackend(page: Page, opts: MockOptions) {
     // --- the analyze Edge Function ---
     if (pathname === '/functions/v1/analyze') {
       const body = JSON.parse(request.postData() ?? '{}') as AnalyzeBody;
-      const { status, json: payload } = analyze.handle(body);
+      const { status, json: payload } = await analyze.respond(body);
       return json(route, payload, status);
     }
 

@@ -160,7 +160,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         problemName,
         threadFollowUps: owned
           ? await countThreadFollowUps(serviceClient, owned.id)
-          : 0,
+          : null,
         dailyFollowUps: owned ? await countDailyFollowUps(serviceClient, userId) : 0,
       });
     } catch (e) {

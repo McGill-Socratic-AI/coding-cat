@@ -110,11 +110,13 @@ export async function findOwnedThread(
 
 // Follow-ups asked since the thread's latest review — the same boundary
 // currentConversation draws for toAnalyzeThread, so the cap the server enforces
-// and the count the panel shows cannot disagree.
+// and the count the panel shows cannot disagree. null when the thread has no
+// review yet (a first review that failed upstream leaves an empty thread), so
+// there is nothing to follow up on.
 export async function countThreadFollowUps(
   client: SupabaseClient,
   threadId: string,
-): Promise<number> {
+): Promise<number | null> {
   const { data: latest, error: latestError } = await client
     .from("analyze_messages")
     .select("turn_index")
@@ -125,15 +127,15 @@ export async function countThreadFollowUps(
     .maybeSingle();
   if (latestError) throw latestError;
   const reviewTurn = (latest as { turn_index: number } | null)?.turn_index;
+  if (typeof reviewTurn !== "number") return null;
 
-  let query = client
+  const { count, error } = await client
     .from("analyze_messages")
     .select("id", { count: "exact", head: true })
     .eq("thread_id", threadId)
     .eq("role", "user")
-    .eq("source", "followup");
-  if (typeof reviewTurn === "number") query = query.gt("turn_index", reviewTurn);
-  const { count, error } = await query;
+    .eq("source", "followup")
+    .gt("turn_index", reviewTurn);
   if (error) throw error;
   return count ?? 0;
 }
@@ -349,13 +351,19 @@ export type FollowUpGate =
 export function gateFollowUp(args: {
   thread: ThreadRow | null;
   problemName: string;
-  threadFollowUps: number;
+  // From countThreadFollowUps: null means the thread holds no review yet.
+  threadFollowUps: number | null;
   dailyFollowUps: number;
 }): FollowUpGate {
   // findOwnedThread already returns null for another student's thread; the
   // problem check keeps a thread id from being replayed against a different
-  // problem's context. Both answer "not found" so ids cannot be probed.
-  if (!args.thread || args.thread.problem_name !== args.problemName) {
+  // problem's context, and a thread with no review has nothing to follow up
+  // on. All answer "not found" so ids cannot be probed.
+  if (
+    !args.thread ||
+    args.thread.problem_name !== args.problemName ||
+    args.threadFollowUps === null
+  ) {
     return { allowed: false, kind: "thread_not_found" };
   }
   if (args.threadFollowUps >= MAX_FOLLOWUPS_PER_THREAD) {

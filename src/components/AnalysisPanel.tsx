@@ -44,7 +44,12 @@ export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFol
     const threadMessages = showingFreshReview
         ? conversation.filter(m => m.source === 'followup')
         : conversation;
-    const canConverse = acknowledged && thread && followUp && onFollowUp;
+    // A thread left empty by a failed first review has nothing to follow up on.
+    const canConverse = acknowledged && thread && followUp && onFollowUp
+        && conversation.some(m => m.source === 'review');
+    // The thread input is disabled while a review runs; this is the other
+    // direction, so a review and a follow-up never overlap.
+    const followUpInFlight = followUp?.status === 'loading';
 
     return (
         <Stack spacing={3} sx={{ p: 3 }}>
@@ -58,7 +63,7 @@ export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFol
         </Box>
 
         {acknowledged && (['idle', 'success'].includes(state.status) ? (
-          <Button size="lg" onClick={onAnalyze}>
+          <Button size="lg" onClick={onAnalyze} disabled={followUpInFlight}>
             Generate Analysis
           </Button>
         ): state.status === 'loading' && <Typography sx={{ textAlign: "center", fontStyle: "italic",}}>
@@ -79,7 +84,7 @@ export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFol
             {state.retryAt && <Typography> Try again after {state.retryAt}. </Typography>}
             {state.usage && <Typography> {state.usage.dailyUsed}/20 AI analyses used today, {state.usage.problemUsed}/5 used today on this problem. </Typography>}
             {['upstream', 'unknown'].includes(state.kind) && acknowledged && <Box sx={{ mt: 1, display: "flex", justifyContent: "center" }}>
-                <Button size="md" onClick={onAnalyze}> Try Again </Button>
+                <Button size="md" onClick={onAnalyze} disabled={followUpInFlight}> Try Again </Button>
                 </Box>}
             </Box>}
 

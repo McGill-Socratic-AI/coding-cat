@@ -63,6 +63,13 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
   const threadRef = useRef<AnalyzeThread | null>(null);
   threadRef.current = thread;
 
+  // Bumped whenever the conversation on screen is replaced: a review starts or
+  // the student switches problems. A follow-up drops its result if the
+  // generation moved while it was in flight, since its thread snapshot was
+  // taken before that newer conversation existed. Guarding on the generation
+  // rather than comparing threads keeps the rule independent of call ordering.
+  const conversationGen = useRef(0);
+
   const problemName = problem.meta.name;
   // Depend on the id, not the Session object: a context that hands back a new
   // object each render would otherwise re-fetch the conversation every render.
@@ -71,6 +78,7 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
   // Reset state when the user switches problems so a previous problem's
   // success/error result doesn't leak into the new problem's panel.
   useEffect(() => {
+    conversationGen.current += 1;
     setState({ status: 'idle' });
     setThread(null);
     setFollowUp({ status: 'idle' });
@@ -129,6 +137,7 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
   }, [problemName, userId]);
 
   async function run(body: AnalyzeRequest) {
+    conversationGen.current += 1;
     setState({ status: 'loading' });
     setFollowUp({ status: 'idle' });
     if (MOCK()) {
@@ -195,9 +204,12 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
     }
 
     setFollowUp({ status: 'loading' });
+    const gen = conversationGen.current;
+    const superseded = () => conversationGen.current !== gen;
 
     if (MOCK()) {
       await new Promise(r => setTimeout(r, 500));
+      if (superseded()) return;
       const next = current.messages.length;
       setThread(mockThread(current.threadId, [
         ...current.messages,
@@ -211,9 +223,11 @@ export default function useAnalyze(problem: Problem, session?: Session | null) {
     const { data, error } = await supabase.functions.invoke<AnalyzeResponse>('analyze', {
       body: { ...body, followUp: { threadId: current.threadId, message: trimmed } },
     });
+    if (superseded()) return;
 
     if (error) {
       const parsed = await parseInvokeError(error);
+      if (superseded()) return;
       if (parsed) {
         setFollowUp({ status: 'error', kind: parsed.kind, message: parsed.message, retryAt: parsed.retryAt });
         // The conversation is gone server-side — drop it so the panel offers a

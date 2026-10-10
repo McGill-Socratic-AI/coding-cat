@@ -324,6 +324,30 @@ Deno.test("a new review starts a fresh follow-up allowance", async () => {
   assertEquals((await loadThread(client as any, THREAD_ID)).followUpsUsed, 1);
 });
 
+Deno.test("a thread with no review refuses a follow-up as not found", async () => {
+  // getOrCreateThread runs before the Socratic call, so a first review that
+  // fails upstream leaves an empty thread behind: nothing to follow up on.
+  const { client } = memoryMessages();
+  const threadFollowUps = await countThreadFollowUps(client as any, THREAD_ID);
+  assertEquals(threadFollowUps, null);
+  assertEquals(
+    gateFollowUp({ thread: threadRow(), problemName: "two-sum", threadFollowUps, dailyFollowUps: 0 }),
+    { allowed: false, kind: "thread_not_found" },
+  );
+
+  await appendTurn(client as any, {
+    threadId: THREAD_ID,
+    userId: OWNER,
+    source: "review",
+    studentMessage: "review please",
+    code: "",
+    reply: "?",
+    model: "m",
+    latencyMs: 1,
+  });
+  assertEquals(await countThreadFollowUps(client as any, THREAD_ID), 0);
+});
+
 Deno.test("countDailyFollowUps counts the student's follow-ups since UTC midnight", async () => {
   const client = fakeClient(() => ({ count: 7, error: null }));
   assertEquals(await countDailyFollowUps(client as any, OWNER), 7);

@@ -275,6 +275,47 @@ test('thread_not_found drops the conversation so the panel offers a fresh analys
   expect(f.kind).toBe('thread_not_found');
 });
 
+test('a follow-up that resolves after a newer review does not overwrite its thread', async () => {
+  const { result } = await withAnalyzedThread();
+
+  let resolveFollowUp!: (value: any) => void;
+  mockInvoke.mockImplementationOnce(() => new Promise(r => { resolveFollowUp = r; }));
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.askFollowUp(request, 'why?'); });
+  await waitFor(() => expect(result.current.followUp.status).toBe('loading'));
+
+  const newer = thread({
+    messages: [
+      ...thread().messages,
+      { id: '2', role: 'user', source: 'review', content: 'Requested an analysis of my code.', turnIndex: 2, createdAt: NOW },
+      { id: '3', role: 'assistant', source: 'review', content: 'Second review', turnIndex: 3, createdAt: NOW },
+    ],
+  });
+  mockInvoke.mockResolvedValueOnce(okResponse({ analysis: 'Second review', thread: newer }));
+  await act(async () => { await result.current.run(request); });
+  expect(result.current.thread).toEqual(newer);
+
+  // The follow-up's snapshot predates the second review.
+  const stale = thread({
+    messages: [
+      ...thread().messages,
+      { id: '2', role: 'user', source: 'followup', content: 'why?', turnIndex: 2, createdAt: NOW },
+      { id: '3', role: 'assistant', source: 'followup', content: 'Stale reply', turnIndex: 3, createdAt: NOW },
+    ],
+    followUpsUsed: 1,
+  });
+  await act(async () => {
+    resolveFollowUp(okResponse({ thread: stale }));
+    await pending;
+  });
+
+  expect(result.current.thread).toEqual(newer);
+  expect(result.current.followUp.status).toBe('idle');
+  const s = result.current.state;
+  if (s.status !== 'success') throw new Error('expected the newer review to stay on screen');
+  expect(s.analysis).toBe('Second review');
+});
+
 // --- Re-opening a persisted conversation ----------------------------------
 
 test('a signed-in student re-opens their stored conversation', async () => {

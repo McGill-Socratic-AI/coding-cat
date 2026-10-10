@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import AnalysisPanel from './AnalysisPanel';
 import type { AnalyzeThread, ThreadMessage } from '../types';
 import { MAX_FOLLOWUPS_PER_THREAD } from '../utils/analysisLimits';
@@ -55,4 +55,42 @@ test('a re-opened conversation shows the latest review and its follow-ups only',
   expect(screen.getByText('new question')).not.toBeNull();
   expect(screen.queryByText('first review request')).toBeNull();
   expect(screen.queryByText('old question')).toBeNull();
+});
+
+test('Generate Analysis is unavailable while a follow-up is in flight', () => {
+  const onAnalyze = jest.fn();
+  const success = { status: 'success' as const, analysis: 'second review reply', usage: { dailyUsed: 2, problemUsed: 2 } };
+  const { rerender } = render(<AnalysisPanel
+    state={success}
+    onAnalyze={onAnalyze}
+    thread={thread}
+    followUp={{ status: 'loading' }}
+    onFollowUp={() => {}}
+  />);
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: /generate analysis/i });
+  expect(button.disabled).toBe(true);
+  fireEvent.click(button);
+  expect(onAnalyze).not.toHaveBeenCalled();
+
+  rerender(<AnalysisPanel
+    state={success}
+    onAnalyze={onAnalyze}
+    thread={thread}
+    followUp={{ status: 'idle' }}
+    onFollowUp={() => {}}
+  />);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: /generate analysis/i }).disabled).toBe(false);
+});
+
+test('a conversation with no review offers no follow-up input', () => {
+  // What a first review that failed upstream leaves behind.
+  render(<AnalysisPanel
+    state={{ status: 'idle' }}
+    onAnalyze={() => {}}
+    thread={{ ...thread, messages: [], followUpsUsed: 0 }}
+    followUp={{ status: 'idle' }}
+    onFollowUp={() => {}}
+  />);
+  expect(screen.queryByLabelText('Follow-up question')).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: /generate analysis/i }).disabled).toBe(false);
 });
