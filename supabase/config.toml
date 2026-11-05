@@ -428,3 +428,13 @@ entrypoint = "./functions/analyze/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/analyze/*.html" ]
+
+# Registration, sign-in and recovery for pseudonymous accounts.
+# verify_jwt = false because every action here is one a signed-out visitor
+# performs; the function validates its own input and uses no caller-supplied
+# privileges. See supabase/functions/account/index.ts.
+[functions.account]
+enabled = true
+verify_jwt = false
+import_map = "./functions/account/deno.json"
+entrypoint = "./functions/account/index.ts"

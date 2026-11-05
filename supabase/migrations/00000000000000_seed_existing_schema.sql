@@ -57,18 +57,6 @@ ALTER TABLE activated ENABLE ROW LEVEL SECURITY;
 CREATE POLICY activated_read_all ON activated
     FOR SELECT USING (true);   -- public/anonymous read is fine; flags are not sensitive
 
--- Admin writes go through the user-bound (anon-key) client from AdminPage.tsx,
--- so the policy must allow writes when profiles.is_admin = true for the
--- caller.  Anyone non-admin still gets blocked by RLS.
-CREATE POLICY activated_admin_write ON activated
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM profiles
-            WHERE profile_id = auth.uid() AND is_admin = true
-        )
-    );                         -- AdminPage.tsx (anon-key client) needs this to flip flags.
-
-
 -- ---------------------------------------------------------------------------
 -- TABLE: profiles
 -- Source: src/routes/root.tsx           (select is_admin)
@@ -110,6 +98,23 @@ CREATE POLICY profiles_self_update ON profiles
 -- VERIFY: root.tsx reads profiles.is_admin for *every* authenticated user on
 -- every page load; the SELECT policy above covers that.  If you want admins to
 -- be able to view other profiles, add a separate policy.
+
+
+-- Admin writes to `activated` go through the user-bound (anon-key) client from
+-- AdminPage.tsx, so the policy must allow writes when profiles.is_admin = true
+-- for the caller.  Anyone non-admin still gets blocked by RLS.
+--
+-- It lives here, after profiles, and not up with the rest of the `activated`
+-- policies: CREATE POLICY resolves the tables its expression names right away,
+-- so declaring it before profiles existed aborted this migration on a fresh
+-- project with `relation "profiles" does not exist`.
+CREATE POLICY activated_admin_write ON activated
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profile_id = auth.uid() AND is_admin = true
+        )
+    );                         -- AdminPage.tsx (anon-key client) needs this to flip flags.
 
 
 -- ---------------------------------------------------------------------------
