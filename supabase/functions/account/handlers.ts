@@ -202,14 +202,28 @@ async function handleRecover(
     return fail("unknown", "Could not check that recovery code. Please try again.");
   }
 
-  // Order matters, because there is no transaction across these two writes.
-  // Password first: if the rotation below then fails, the student is still in
-  // (new password works, old code still live). The other order can end with a
+  // Order matters, because there is no transaction across these writes.
+  // Password first: if anything below then fails, the old code is still live
+  // and the student can simply redeem it again. The other order can end with a
   // retired code AND an unchanged password — an account nobody can reach.
   try {
     await store.setPassword(profileId, password);
   } catch (e) {
     console.error("[account] recovery could not set the password:", e);
+    return fail("unknown", "Could not reset the password. Please try again.");
+  }
+
+  // Recovery is how an account is taken back from whoever else knew the
+  // password, so it only counts once every other session has been ended.
+  let session: AccountSession;
+  try {
+    const email = await store.loginEmailFor(profileId);
+    const opened = email ? await store.signIn(email, password) : null;
+    if (!opened) throw new Error("no session with the new password");
+    await store.revokeOtherSessions(opened.access_token);
+    session = opened;
+  } catch (e) {
+    console.error("[account] recovery could not end the other sessions:", e);
     return fail("unknown", "Could not reset the password. Please try again.");
   }
 
@@ -222,14 +236,6 @@ async function handleRecover(
   } catch (e) {
     console.error("[account] recovery could not rotate the code:", e);
     nextCode = undefined;
-  }
-
-  let session: AccountSession | null = null;
-  try {
-    const email = await store.loginEmailFor(profileId);
-    if (email) session = await store.signIn(email, password);
-  } catch (e) {
-    console.error("[account] recovery could not open a session:", e);
   }
 
   return ok(username, session, nextCode);

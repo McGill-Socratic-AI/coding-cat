@@ -43,11 +43,16 @@ export interface AccountStore {
   putRecoveryHash(profileId: string, hash: string): Promise<void>;
   recoveryHashFor(profileId: string): Promise<string | null>;
   setPassword(profileId: string, password: string): Promise<void>;
-  /** Tokens on success, null when the credentials do not match. */
+  /**
+   * Tokens on success, null when the credentials do not match. Throws on any
+   * other failure (rate limit, outage), which must not read as a wrong password.
+   */
   signIn(
     email: string,
     password: string,
   ): Promise<{ access_token: string; refresh_token: string } | null>;
+  /** End every session of this access token's user except that token's own. */
+  revokeOtherSessions(accessToken: string): Promise<void>;
 }
 
 function serviceClient(): SupabaseClient {
@@ -169,11 +174,22 @@ export function makeSupabaseStore(): AccountStore {
       });
       // Wrong password is the expected case here, not an outage: report it as
       // "no session" and let the handler turn it into invalid_credentials.
-      if (error || !data?.session) return null;
+      if (error) {
+        if (error.status === 400 && (error.code ?? "invalid_credentials") === "invalid_credentials") {
+          return null;
+        }
+        throw new Error(`sign-in failed (${error.status ?? "?"}): ${error.message}`);
+      }
+      if (!data?.session) throw new Error("sign-in returned no session");
       return {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       };
+    },
+
+    async revokeOtherSessions(accessToken) {
+      const { error } = await service.auth.admin.signOut(accessToken, "others");
+      if (error) throw new Error(`session revocation failed: ${error.message}`);
     },
   };
 }

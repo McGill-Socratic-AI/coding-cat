@@ -9,20 +9,10 @@
 // Nothing in the app ever shows this address, and the browser never sends one:
 // the account function resolves a username to its auth user itself.
 
-const DEFAULT_DOMAIN = "users.coding-cat.invalid";
+export const PLACEHOLDER_DOMAIN = "users.coding-cat.invalid";
 
-/**
- * `ACCOUNT_EMAIL_DOMAIN` only exists for a deployment whose GoTrue is
- * configured to reject unknown domains. Keep it inside `.invalid` or another
- * domain that genuinely cannot receive mail.
- */
-export function placeholderDomain(): string {
-  const domain = (Deno.env.get("ACCOUNT_EMAIL_DOMAIN") ?? "").trim().toLowerCase();
-  return domain.length > 0 ? domain : DEFAULT_DOMAIN;
-}
-
-export function generatePlaceholderEmail(domain: string = placeholderDomain()): string {
+export function generatePlaceholderEmail(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   const local = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return `u${local}@${domain}`;
+  return `u${local}@${PLACEHOLDER_DOMAIN}`;
 }

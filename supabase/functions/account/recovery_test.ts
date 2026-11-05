@@ -10,7 +10,7 @@ import {
   RECOVERY_CODE_LEN,
   verifyRecoveryCode,
 } from "./recovery.ts";
-import { generatePlaceholderEmail, placeholderDomain } from "./placeholder.ts";
+import { generatePlaceholderEmail, PLACEHOLDER_DOMAIN } from "./placeholder.ts";
 
 Deno.test("a generated code is grouped base32 with no ambiguous letters", () => {
   const code = generateRecoveryCode();
@@ -91,10 +91,9 @@ Deno.test("the placeholder address is random and undeliverable", () => {
   const a = generatePlaceholderEmail();
   const b = generatePlaceholderEmail();
   assertNotEquals(a, b);
-  assert(a.endsWith(`@${placeholderDomain()}`), a);
+  assert(a.endsWith(`@${PLACEHOLDER_DOMAIN}`), a);
   // 128 bits of hex plus the leading 'u': nothing derived from the student.
   assertEquals(a.split("@")[0].length, 33);
-  // The default domain is in RFC 2606's reserved `.invalid` TLD, so no mail
-  // can ever be delivered to one of these addresses.
-  assertEquals(generatePlaceholderEmail("users.coding-cat.invalid").endsWith(".invalid"), true);
+  // RFC 2606's reserved `.invalid` TLD: no mail can ever be delivered here.
+  assert(a.endsWith(".invalid"), a);
 });

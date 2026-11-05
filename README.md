@@ -46,7 +46,10 @@ pseudonymous, and the app collects no personal information at all:
   `.invalid` TLD (`supabase/functions/account/placeholder.ts`). It is
   undeliverable, identifies nobody, and is never shown: the browser sends a
   username and the Edge Function resolves it. There is no magic link and no
-  "email me a reset link", and email confirmation must stay off.
+  "email me a reset link", and email confirmation must stay off. GoTrue's public
+  signup is disabled, so the Edge Function is the only way to create an account,
+  and a trigger on `auth.users` refuses any change to an account's email or
+  phone, so the placeholder can never be swapped for a real address.
 * **No name and no student number.** The old profile editor collected both;
   `profiles.student_id` has been dropped, the editor is gone, and
   `profiles_username_policy` refuses a username that is an email address or a
@@ -55,7 +58,9 @@ pseudonymous, and the app collects no personal information at all:
   sign-up page and the AI Analysis panel both say not to type a name or student
   number into code, questions or reflections — the one leak the app cannot
   prevent on its own.
-* **No IP addresses.** Nothing the app writes or forwards carries one. School
+* **No IP addresses.** Nothing the app writes or forwards carries one, and
+  triggers blank the IP GoTrue would record in `auth.audit_log_entries` and
+  `auth.sessions` (`20261105000001_scrub_auth_ip_addresses.sql`). School
   WiFi, VPN and lab logins can map an IP and a timestamp back to a student, so
   rate limits key on the Supabase user id instead (`analyze_calls.user_id`, see
   `supabase/functions/analyze/rate_limit.ts`), and the Socratic API is sent that
@@ -85,10 +90,14 @@ anyone, course staff included; the sign-up screen says so and will not continue
 until the student confirms they wrote it down.
 
 A wrong password and an unknown username give the same answer, as do a wrong
-code and an unknown username. Signing in is proxied rather than done in the
-browser (the placeholder address must not leave the server), which means
-GoTrue's per-IP `sign_in_sign_ups` limit sees the function rather than the
-student: configure that limit on the deployment. We deliberately do **not** lock
+code and an unknown username. A GoTrue rate limit or outage is reported as a
+failure to retry, never as a wrong password. Signing in is proxied rather than
+done in the browser (the placeholder address must not leave the server), which
+means GoTrue's per-IP `sign_in_sign_ups` limit sees the function rather than the
+student, so one bucket is shared by the whole class; `supabase/config.toml` sets
+it to 500 per 5 minutes, and the deployment must match. Redeeming a recovery
+code ends every other session on the account, so it takes an account back from
+anyone else who knew the password. We deliberately do **not** lock
 an account after failed attempts — knowing a classmate's username would then be
 enough to lock them out of a lab or an exam, which is the worse failure here.
 
@@ -111,8 +120,8 @@ not in this repo:
 | --- | --- | --- |
 | Email confirmations | off | the placeholder address can never receive one |
 | SMTP | not configured | nothing should ever try to send mail |
-| `ACCOUNT_EMAIL_DOMAIN` | unset, or another non-deliverable domain | only needed if GoTrue is set to reject unknown domains |
-| GoTrue audit log / request log retention | scrub or disable IP retention | `auth.audit_log_entries` records the caller's IP, which this code cannot reach |
+| Public signup | disabled (`GOTRUE_DISABLE_SIGNUP=true`) | accounts are created only by the `account` function |
+| Sign-in / sign-up rate limit | 500 per 5 minutes, as in `config.toml` | every sign-in arrives from the function's address |
 
 ## Modifying the App
 

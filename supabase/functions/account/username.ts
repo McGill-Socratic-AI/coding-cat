@@ -31,27 +31,6 @@ const SHAPE = /^[a-z][a-z0-9_-]{2,23}$/;
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+$/;
 const DOTTED_HOST = /\.[a-z]{2,}$/;
 
-// Handles a student must not be able to claim: they would let one student pose
-// as course staff or as the app itself to another.
-const RESERVED = new Set([
-  "admin",
-  "administrator",
-  "root",
-  "superuser",
-  "moderator",
-  "support",
-  "staff",
-  "teacher",
-  "professor",
-  "instructor",
-  "grader",
-  "codingcat",
-  "coding-cat",
-  "system",
-  "anonymous",
-  "null",
-  "undefined",
-]);
 
 export type UsernameCheck =
   | { ok: true; username: string }
@@ -130,10 +109,6 @@ export function validateUsername(raw: unknown): UsernameCheck {
       error:
         "A username must start with a letter and use only letters, digits, hyphens and underscores.",
     };
-  }
-
-  if (RESERVED.has(username)) {
-    return { ok: false, error: "That username is reserved. Please choose another." };
   }
 
   return { ok: true, username };

@@ -28,7 +28,9 @@
 --   4. teaches `handle_new_user` to copy the username out of the new auth
 --      user's metadata, so profile creation and the uniqueness check happen in
 --      the same transaction as the auth user insert — a taken username fails
---      the signup instead of leaving an orphaned auth user behind.
+--      the signup instead of leaving an orphaned auth user behind;
+--   5. forbids changing an auth user's email or phone, so the placeholder can
+--      never be swapped for a real address.
 --
 -- No data migration: the VM this runs on starts with no users, and cloud
 -- accounts are deliberately not carried over (their emails are the problem).
@@ -190,3 +192,38 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+
+-- ---------------------------------------------------------------------------
+-- 5. The placeholder address is permanent
+--
+-- Confirmations are off, so GoTrue would apply a self-service
+-- `updateUser({ email })` or `updateUser({ phone })` at once and a student's
+-- real address or number would land in `auth.users`. Nothing in the app ever
+-- changes either field, so refuse every change at the table, whoever asks.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.forbid_auth_contact_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.email IS DISTINCT FROM OLD.email
+       OR NEW.phone IS DISTINCT FROM OLD.phone
+       OR (COALESCE(NEW.email_change, '') <> ''
+           AND NEW.email_change IS DISTINCT FROM OLD.email_change)
+       OR (COALESCE(NEW.phone_change, '') <> ''
+           AND NEW.phone_change IS DISTINCT FROM OLD.phone_change) THEN
+        RAISE EXCEPTION 'accounts have no email address or phone number to change'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS forbid_auth_contact_change ON auth.users;
+
+CREATE TRIGGER forbid_auth_contact_change
+    BEFORE UPDATE ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.forbid_auth_contact_change();

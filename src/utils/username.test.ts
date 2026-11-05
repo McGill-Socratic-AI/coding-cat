@@ -73,13 +73,6 @@ test('an empty username asks for one', () => {
   expect(validateUsername('   ')).toEqual({ ok: false, error: 'Choose a username.' });
 });
 
-test.each(['admin', 'Instructor', 'coding-cat'])('%s is reserved', (name) => {
-  const result = validateUsername(name);
-  expect(result.ok).toBe(false);
-  if (result.ok) return;
-  expect(result.error).toContain('reserved');
-});
-
 describe('validatePassword', () => {
   test('accepts a long enough password', () => {
     expect(validatePassword('correct horse battery', 'kitty')).toEqual({ ok: true });

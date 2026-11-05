@@ -34,6 +34,13 @@ class FakeStore implements AccountStore {
   failRecoveryWrite = false;
   /** Set to make sign-in fail even with the right password. */
   failSignIn = false;
+  /** Set to make sign-in fail the way a rate limit or an outage does. */
+  signInOutage = false;
+  /** Set to make revoking the other sessions fail. */
+  failRevoke = false;
+  /** Access tokens that have not been revoked, per profile. */
+  live = new Map<string, Set<string>>();
+  private nextSession = 1;
   /** Set to make setPassword fail. */
   failSetPassword = false;
   /** Pretend the username was claimed between the check and the insert. */
@@ -94,13 +101,24 @@ class FakeStore implements AccountStore {
   }
 
   signIn(email: string, password: string) {
+    if (this.signInOutage) return Promise.reject(new Error("sign-in failed (429)"));
     if (this.failSignIn) return Promise.resolve(null);
     const user = this.users.find((u) => u.email === email && u.password === password);
     if (!user) return Promise.resolve(null);
-    return Promise.resolve({
-      access_token: `access-${user.profileId}`,
-      refresh_token: `refresh-${user.profileId}`,
-    });
+    const n = this.nextSession++;
+    const access_token = `access-${user.profileId}-${n}`;
+    const sessions = this.live.get(user.profileId) ?? new Set<string>();
+    sessions.add(access_token);
+    this.live.set(user.profileId, sessions);
+    return Promise.resolve({ access_token, refresh_token: `refresh-${user.profileId}-${n}` });
+  }
+
+  revokeOtherSessions(accessToken: string) {
+    if (this.failRevoke) return Promise.reject(new Error("session revocation failed"));
+    for (const [profileId, sessions] of this.live) {
+      if (sessions.has(accessToken)) this.live.set(profileId, new Set([accessToken]));
+    }
+    return Promise.resolve();
   }
 }
 
@@ -137,7 +155,7 @@ Deno.test("signup creates the account and hands back a session and a recovery co
   assertEquals(status, 200);
   assert(body.ok);
   assertEquals(body.username, "kitty");
-  assertEquals(body.session?.access_token, "access-profile-1");
+  assertEquals(body.session?.access_token, "access-profile-1-1");
   assert(body.recoveryCode && body.recoveryCode.length > 0);
 
   // The account exists under the normalized username, with a placeholder email.
@@ -249,7 +267,7 @@ Deno.test("signin returns a session for the right password", async () => {
   assertEquals(status, 200);
   assert(body.ok);
   assertEquals(body.username, "kitty");
-  assertEquals(body.session?.refresh_token, "refresh-profile-1");
+  assertEquals(body.session?.refresh_token, "refresh-profile-1-2");
   // No new code is issued on an ordinary sign-in.
   assertEquals(body.recoveryCode, undefined);
   assertEquals(raw.includes("@"), false);
@@ -276,6 +294,22 @@ Deno.test("a wrong password and an unknown username are indistinguishable", asyn
   assertEquals(wrongPassword.body.kind, "invalid_credentials");
   assertEquals(noSuchUser.body.kind, wrongPassword.body.kind);
   assertEquals(noSuchUser.body.message, wrongPassword.body.message);
+});
+
+Deno.test("signin reports a rate limit or outage as a failure, not a wrong password", async () => {
+  const store = new FakeStore();
+  await signUp(store);
+  store.signInOutage = true;
+
+  const { status, body } = await call(store, {
+    action: "signin",
+    username: "kitty",
+    password: PASSWORD,
+  });
+
+  assertEquals(status, 500);
+  assert(!body.ok);
+  assertEquals(body.kind, "unknown");
 });
 
 Deno.test("signin asks for both fields before looking anything up", async () => {
@@ -309,7 +343,7 @@ Deno.test("recovery resets the password, and the code used stops working", async
 
   assertEquals(status, 200);
   assert(body.ok);
-  assertEquals(body.session?.access_token, "access-profile-1");
+  assertEquals(body.session?.access_token, "access-profile-1-2");
   // A replacement code is issued, so the account is never left without one.
   assert(body.recoveryCode);
   assertNotEquals(body.recoveryCode, firstCode);
@@ -429,6 +463,45 @@ Deno.test("recovery keeps the student in when the password changes but the code 
   // which is still the live one.
   assertEquals(body.recoveryCode, undefined);
   assertEquals(store.users[0].password, OTHER_PASSWORD);
+  assert(await verifyRecoveryCode(firstCode, store.recovery.get("profile-1")!));
+});
+
+Deno.test("recovery ends every other session on the account", async () => {
+  const store = new FakeStore();
+  const created = await signUp(store);
+  assert(created.body.ok);
+  const intruder = await call(store, { action: "signin", username: "kitty", password: PASSWORD });
+  assert(intruder.body.ok);
+
+  const { status, body } = await call(store, {
+    action: "recover",
+    username: "kitty",
+    recoveryCode: created.body.recoveryCode!,
+    password: OTHER_PASSWORD,
+  });
+
+  assertEquals(status, 200);
+  assert(body.ok && body.session);
+  assertEquals([...store.live.get("profile-1")!], [body.session.access_token]);
+});
+
+Deno.test("recovery fails without retiring the code when other sessions cannot be ended", async () => {
+  const store = new FakeStore();
+  const created = await signUp(store);
+  assert(created.body.ok);
+  const firstCode = created.body.recoveryCode!;
+  store.failRevoke = true;
+
+  const { status, body } = await call(store, {
+    action: "recover",
+    username: "kitty",
+    recoveryCode: firstCode,
+    password: OTHER_PASSWORD,
+  });
+
+  assertEquals(status, 500);
+  assert(!body.ok);
+  assertEquals(body.kind, "unknown");
   assert(await verifyRecoveryCode(firstCode, store.recovery.get("profile-1")!));
 });
 

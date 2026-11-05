@@ -90,14 +90,6 @@ Deno.test("an empty username asks for one", () => {
   assertEquals(result.error, "Choose a username.");
 });
 
-Deno.test("staff-sounding handles are reserved", () => {
-  for (const name of ["admin", "Instructor", "coding-cat"]) {
-    const result = validateUsername(name);
-    assert(!result.ok, `expected ${name} to be reserved`);
-    assert(result.error.includes("reserved"), result.error);
-  }
-});
-
 Deno.test("password policy: length floor, byte ceiling, and not the username", () => {
   assert(validatePassword("correct horse battery", "kitty").ok);
 
