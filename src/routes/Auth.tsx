@@ -102,8 +102,10 @@ function RecoveryCodeScreen({
       <Stack spacing={2} alignItems="center" sx={{ maxWidth: '34em' }}>
         <Typography level="h2">Password changed</Typography>
         <Alert color="warning" variant="soft">
-          Your password has been changed, but we could not issue a new recovery code.{' '}
-          <strong>Keep the recovery code you just used</strong> — it is still the one that works.
+          <Box>
+            Your password has been changed, but we could not issue a new recovery code.{' '}
+            <strong>Keep the recovery code you just used</strong> — it is still the one that works.
+          </Box>
         </Alert>
         <Button onClick={onContinue} disabled={busy}>
           Continue
@@ -121,9 +123,11 @@ function RecoveryCodeScreen({
         Signed in as <strong>{issued.username}</strong>.
       </Typography>
       <Alert color="danger" variant="soft">
-        This code is shown <strong>once</strong>. It is the only way back into your account if
-        you forget your password: there is no email address on your account, so no reset link can
-        be sent, and nobody — not even the course staff — can look this code up for you.
+        <Box>
+          This code is shown <strong>once</strong>. It is the only way back into your account if
+          you forget your password: there is no email address on your account, so no reset link
+          can be sent, and nobody — not even the course staff — can look this code up for you.
+        </Box>
       </Alert>
       <Typography
         level="h3"

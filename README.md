@@ -121,6 +121,7 @@ not in this repo:
 | Email confirmations | off | the placeholder address can never receive one |
 | SMTP | not configured | nothing should ever try to send mail |
 | Public signup | disabled (`GOTRUE_DISABLE_SIGNUP=true`) | accounts are created only by the `account` function |
+| Email provider | enabled (`GOTRUE_EXTERNAL_EMAIL_ENABLED=true`) | every account signs in with its placeholder address; disabling it blocks all sign-ins |
 | Sign-in / sign-up rate limit | 500 per 5 minutes, as in `config.toml` | every sign-in arrives from the function's address |
 
 ## Modifying the App
