@@ -81,16 +81,18 @@ describe('validatePassword', () => {
   test('refuses a missing or short password', () => {
     expect(validatePassword(undefined).ok).toBe(false);
     expect(validatePassword('').ok).toBe(false);
-    const short = validatePassword('short1');
-    expect(short.ok).toBe(false);
-    if (!short.ok) expect(short.error).toContain('8');
+    expect(validatePassword('short1')).toEqual({
+      ok: false,
+      error: expect.stringContaining('8'),
+    });
   });
 
   test('refuses more than 72 bytes, counting UTF-8 and not characters', () => {
     expect(validatePassword('a'.repeat(72)).ok).toBe(true);
-    const tooLong = validatePassword('a'.repeat(73));
-    expect(tooLong.ok).toBe(false);
-    if (!tooLong.ok) expect(tooLong.error).toContain('72');
+    expect(validatePassword('a'.repeat(73))).toEqual({
+      ok: false,
+      error: expect.stringContaining('72'),
+    });
     // 19 four-byte emoji are 76 bytes, so this is over the limit even though
     // it looks like a 19-character password.
     expect(validatePassword('\u{1F408}'.repeat(19)).ok).toBe(false);
@@ -98,8 +100,9 @@ describe('validatePassword', () => {
   });
 
   test('refuses a password that is just the username', () => {
-    const result = validatePassword('KittyKitty', 'kittykitty');
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('username');
+    expect(validatePassword('KittyKitty', 'kittykitty')).toEqual({
+      ok: false,
+      error: expect.stringContaining('username'),
+    });
   });
 });

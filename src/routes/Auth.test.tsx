@@ -157,9 +157,7 @@ test('signing up still shows the code when no session came back', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
   // Nothing to install: the student is sent to the sign-in form instead.
-  await waitFor(() =>
-    expect(screen.getByText(/your account is ready/i)).not.toBeNull(),
-  );
+  expect(await screen.findByText(/your account is ready/i)).not.toBeNull();
   expect(mockSetSession).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Sign in' })).not.toBeNull();
 });

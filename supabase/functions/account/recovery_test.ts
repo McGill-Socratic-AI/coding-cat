@@ -6,7 +6,6 @@ import {
 import {
   generateRecoveryCode,
   hashRecoveryCode,
-  normalizeRecoveryCode,
   RECOVERY_CODE_LEN,
   verifyRecoveryCode,
 } from "./recovery.ts";
