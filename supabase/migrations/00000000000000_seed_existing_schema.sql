@@ -23,6 +23,11 @@
 -- Reconstruction method: read every .from('<table>') call in src/, plus TS
 -- interface definitions in src/types.ts.  Comments on each column note where
 -- the inference came from.
+--
+-- Ordering invariant: this file must apply top-to-bottom on an empty database,
+-- so every object a policy, function or trigger names has to be created before
+-- that policy/function/trigger.  Keep cross-table policies next to the LAST
+-- table they reference, not next to the table they are attached to.
 -- =============================================================================
 
 
