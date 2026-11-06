@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from "react";
 import { ContractData } from "../../../types";
 import { Button, Input, Option, Select, Stack, Table, Typography } from "@mui/joy";
+import { getContractCategories } from "../../../utils/contract";
 
 interface ContractEditProps {
   setIsUpdating: Dispatch<SetStateAction<boolean>>;
@@ -11,11 +12,9 @@ interface ContractEditProps {
 }
 
 export default function ContractEdit({ setIsUpdating, contract, setContract, onSave, featureMap }: ContractEditProps) {
-  const baseCategories = ["Fundamentals", "Logic", "String-1", "List-1: Indexing"];
-  const allCategories = Object.keys(contract.Coding.problemsToSolveByCategory);
-  const categoriesToEdit = featureMap["CodingStage2"]
-     ? allCategories
-     : baseCategories.filter((c) => allCategories.includes(c));
+  // Same category source as ContractText: the selected problem set, not the
+  // contract's own keys. Keep the two views in step.
+  const categoriesToEdit = getContractCategories(!!featureMap["CodingStage2"]);
 
   return (
     <>
@@ -51,7 +50,7 @@ export default function ContractEdit({ setIsUpdating, contract, setContract, onS
                           sx={{ width: "50px", typography: 'body1' }}
                           slotProps={{ input: { type: "number", min: 0 } }}
                           placeholder="0"
-                          value={contract.Coding.problemsToSolveByCategory[c]}
+                          value={contract.Coding.problemsToSolveByCategory[c] ?? 0}
                           onChange={(e) =>
                             setContract((cat) => ({
                               ...cat,

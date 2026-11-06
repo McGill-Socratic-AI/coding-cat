@@ -121,7 +121,7 @@ export default function App() {
         .order("updated_at", { ascending: false })
         .limit(1);
 
-      if (data) setContract(data[0].data);
+      if (data?.[0]) setContract(data[0].data);
     })();
   }, [session])
 
