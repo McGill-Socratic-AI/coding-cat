@@ -55,9 +55,9 @@ export type AnalyzeRequest = {
 };
 
 // The follow-up limits live in src/utils/analysisLimits.ts, not here: this
-// module has a runtime dependency on the generated src/problems/problems.js
-// (via getCategoryList), so a runtime import from here breaks Jest runs that
-// have not built the problem set.
+// module has a runtime dependency on the selected problem set's generated
+// problems.js (via getCategoryList), so a runtime import from here breaks Jest
+// runs that have not built the problem set.
 
 export type ThreadRole = 'user' | 'assistant';
 export type ThreadSource = 'review' | 'followup';

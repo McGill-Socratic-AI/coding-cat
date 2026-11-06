@@ -1,5 +1,5 @@
-import problems from "../problems/problems";
-import { Progress, Submission } from "../types";
+import getProblemSetSync from "./getProblemSetSync";
+import type { Progress, Submission } from "../types";
 
 interface CompletedByCategory {
   problems: {
@@ -16,6 +16,7 @@ export function getCompletedProblems(submissions: Submission[]): Progress[] {
   const questionTypeByCategory: Record<string, string> = {};
   const completedByCategory: Record<string, CompletedByCategory> = {};
   const completedTitles = new Set<string>();
+  const problems = getProblemSetSync();
 
   for(const p of problems) {
     const question_type = p.meta.question_type[0];

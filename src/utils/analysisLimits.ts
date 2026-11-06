@@ -5,9 +5,9 @@
 // cannot share a file.
 //
 // They live here rather than in src/types.ts on purpose: types.ts imports
-// getCategoryList, which imports the GENERATED src/problems/problems.js. Only
-// type imports from types.ts are erased by Babel, so importing a runtime value
-// from it drags that generated module into every Jest run — and CI's unit-test
-// job does not run `npm run build-problems`.
+// getCategoryList, which loads the selected problem set's GENERATED
+// problems.js. Only type imports from types.ts are erased by Babel, so
+// importing a runtime value from it drags that generated module into every Jest
+// run — and CI's unit-test job does not run `npm run build-problems`.
 export const MAX_FOLLOWUPS_PER_THREAD = 10;
 export const MAX_FOLLOWUP_LEN = 2000;
