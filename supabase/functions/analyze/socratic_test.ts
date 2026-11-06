@@ -122,6 +122,42 @@ Deno.test("buildSocraticRequest: maps fields correctly", () => {
   assertEquals("error" in tr, false);
 });
 
+Deno.test("buildSocraticRequest: the student is only ever a Supabase user id", () => {
+  // Accounts are pseudonymous (see the "Accounts and privacy" section of
+  // README.md): nothing we send upstream may carry an email address, a name or
+  // an IP, so the request shape is pinned here rather than trusted to review.
+  const req = makeRequest({
+    meta: {
+      name: "my-problem",
+      title: "My Problem",
+      difficulty: "easy",
+      author: "admin",
+      category: "dp",
+      question_type: ["standard"],
+    },
+    code: "def solve(): pass",
+    description: "A tricky problem.",
+    testReport: [],
+  });
+
+  const body = buildSocraticRequest(req, "7f1c9e3a-5b2d-4a7e-9c11-2f8e4d6b0a35");
+
+  assertEquals(Object.keys(body).sort(), [
+    "course_offering_id",
+    "message",
+    "problem_context",
+    "problem_ref",
+    "session_id",
+    "student_id",
+  ]);
+  assertEquals(Object.keys(body.problem_context).sort(), [
+    "description",
+    "student_code",
+    "test_results",
+  ]);
+  assertEquals(body.student_id, "7f1c9e3a-5b2d-4a7e-9c11-2f8e4d6b0a35");
+});
+
 Deno.test("buildSocraticRequest: course_offering_id uses env or default", () => {
   const req = makeRequest();
   const body = buildSocraticRequest(req, "user-xyz");

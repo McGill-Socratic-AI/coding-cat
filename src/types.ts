@@ -89,6 +89,49 @@ export type AnalyzeError = {
 export type AnalyzeResponse = AnalyzeSuccess | AnalyzeError;
 
 
+// --- Accounts ---------------------------------------------------------------
+// Mirror of supabase/functions/account/types.ts, which is the contract; CRA and
+// Deno cannot share a file, so keep both sides in sync.
+//
+// Note what these types do NOT carry: no email address (not even the random
+// placeholder the account is created with), no name, no student number. The
+// username is the whole public identity of an account.
+
+export type AccountErrorKind =
+  | 'invalid_input'
+  | 'username_taken'
+  | 'invalid_credentials'
+  | 'invalid_recovery_code'
+  | 'unknown';
+
+/** Exactly the two tokens `supabase.auth.setSession` needs. */
+export type AccountSession = {
+  access_token: string;
+  refresh_token: string;
+};
+
+export type AccountSuccess = {
+  ok: true;
+  username: string;
+  // Issued at sign-up, and re-issued when a code is redeemed. Shown once and
+  // never retrievable again. Absent from a recovery response when the password
+  // was reset but the replacement code could not be stored — the code just
+  // used is then still the live one.
+  recoveryCode?: string;
+  // null when the account is fine but no session could be opened in the same
+  // call; the student signs in on the next screen.
+  session: AccountSession | null;
+};
+
+export type AccountError = {
+  ok: false;
+  kind: AccountErrorKind;
+  message: string;
+};
+
+export type AccountResponse = AccountSuccess | AccountError;
+
+
 export type Progress = {
     category: string;
     completed: number;

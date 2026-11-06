@@ -187,7 +187,11 @@ function session() {
       id: TEST_USER_ID,
       aud: 'authenticated',
       role: 'authenticated',
-      email: 'e2e@example.test',
+      // Accounts are pseudonymous: the only address GoTrue ever holds is a
+      // random placeholder at a domain that cannot receive mail (see
+      // supabase/functions/account/placeholder.ts). Nothing in the app reads
+      // it, and nothing should start to.
+      email: 'u0123456789abcdef0123456789abcdef@users.coding-cat.invalid',
       app_metadata: {},
       user_metadata: {},
       identities: [],
@@ -288,7 +292,9 @@ export async function installMockBackend(page: Page, opts: MockOptions) {
     }
 
     if (pathname === '/rest/v1/profiles') {
-      return json(route, { is_admin: false });
+      // root.tsx reads is_admin; the profile page reads username, which is the
+      // whole of an account's public identity.
+      return json(route, { is_admin: false, username: 'e2e-kitty' });
     }
 
     if (pathname === '/rest/v1/analyze_threads') {

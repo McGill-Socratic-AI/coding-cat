@@ -60,6 +60,12 @@ export default function AnalysisPanel({state, onAnalyze, thread, followUp, onFol
             onChange={handleAckChange}
             label="I understand that my code and the AI response may be stored to improve this feature."
           />
+          {/* Your code and your questions are stored and sent to the Socratic
+              API, keyed only by your Supabase user id — so the one thing that
+              could identify you here is something you type in yourself. */}
+          <Typography level="body-xs" sx={{ mt: 1 }}>
+            Never include your name or student number in your code or your questions.
+          </Typography>
         </Box>
 
         {acknowledged && (['idle', 'success'].includes(state.status) ? (

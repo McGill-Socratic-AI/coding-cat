@@ -168,7 +168,9 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# Off: accounts are created only by the `account` function (service role), so
+# nobody can sign up directly with a real email address.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -199,7 +201,9 @@ anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
 token_refresh = 150
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
-sign_in_sign_ups = 30
+# Every sign-in is proxied by the `account` function, so this one bucket is
+# shared by a whole class; it is also the only brute-force throttle.
+sign_in_sign_ups = 500
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
 token_verifications = 30
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
@@ -212,7 +216,9 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
+# Keep the email provider on: it is what `signInWithPassword` uses for the
+# placeholder addresses, and `false` here sets GOTRUE_EXTERNAL_EMAIL_ENABLED=false,
+# which disables every sign-in. Public signup is closed by `[auth] enable_signup`.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -428,3 +434,13 @@ entrypoint = "./functions/analyze/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/analyze/*.html" ]
+
+# Registration, sign-in and recovery for pseudonymous accounts.
+# verify_jwt = false because every action here is one a signed-out visitor
+# performs; the function validates its own input and uses no caller-supplied
+# privileges. See supabase/functions/account/index.ts.
+[functions.account]
+enabled = true
+verify_jwt = false
+import_map = "./functions/account/deno.json"
+entrypoint = "./functions/account/index.ts"
