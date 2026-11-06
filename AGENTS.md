@@ -15,7 +15,7 @@ Without that, `npm run build` and `tsc --noEmit` fail on `Cannot find module '..
 
 ## Sharp edge: `src/types.ts` is not import-free
 
-`src/types.ts` imports `getCategoryList`, which imports the generated `src/problems/problems.js` at runtime. Babel erases type-only imports, so a module that imports only *types* from `src/types.ts` is safe — but importing a **runtime value** from it (a `const`, `BLANK_CONTRACT`) pulls the generated module into every Jest run, and the CI unit-test job (`.github/workflows/main.yml`, job `test`) does not run `build-problems`. Put shared runtime constants in their own module instead; `src/utils/analysisLimits.ts` is the worked example.
+`src/types.ts` imports `getCategoryList`, which loads the generated `problems.js` of the selected problem set (`src/utils/problemSetDir.ts`) at runtime. Babel erases type-only imports, so a module that imports only *types* from `src/types.ts` is safe — but importing a **runtime value** from it (a `const`, `BLANK_CONTRACT`) pulls the generated module into every Jest run, and the CI unit-test job (`.github/workflows/main.yml`, job `test`) does not run `build-problems`. Put shared runtime constants in their own module instead; `src/utils/analysisLimits.ts` is the worked example.
 
 ## Three test runners
 

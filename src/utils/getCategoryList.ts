@@ -1,4 +1,4 @@
-import problems from "../problems/problems";
+import getProblemSetSync from "./getProblemSetSync";
 
 // TODO: since mutation and haystack aren't considered categories,
 // the array this function returns doesn't contain them. if the issue
@@ -6,7 +6,7 @@ import problems from "../problems/problems";
 export function getCategoryList() {
   const categories = new Set<string>();
 
-  problems.forEach((p) => {
+  getProblemSetSync().forEach((p) => {
     categories.add(p.meta.category);
   });
 

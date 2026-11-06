@@ -26,7 +26,7 @@ To run the tests, use the `npm run test` command in the project root.
 
 ### Load different problem sets
 
-To switch the problem set from the public-problems repository to the private-problems one, define an environment variable called `REACT_APP_PROBLEM_SET` and set it to either `public-problems` or `private_problems`. You will have to rebuild the problem list using `npm run build-problems`. If this variable is not defined, it will use `public-problems` by default.
+To switch the problem set from the public-problems repository to the private-problems one, define an environment variable called `REACT_APP_PROBLEM_SET` (e.g. in `.env.local`) and set it to the name of a problem-set directory under `src/`, such as `public-problems` or `private-problems`. It selects the set for everything — the problem list, the category lists and progress tracking — so there is no need to repoint the `src/problems` symlink. You will have to rebuild the problem list using `npm run build-problems`. If this variable is not defined, it uses the `src/problems` symlink, which points to `public-problems`.
 
 ## Accounts and privacy
 
