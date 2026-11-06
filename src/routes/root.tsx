@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react' ;
 import { Outlet, useLoaderData } from 'react-router';
 import { Link } from 'react-router-dom';
 import { BLANK_CONTRACT, ContractData, ContractProgress, Problem } from '../types';
+import { mergeContract } from '../utils/contract';
 import { supabase } from '../supabaseClient'
 import type { Session } from '@supabase/supabase-js'
 import {List as ListIcon} from '@phosphor-icons/react';
@@ -121,7 +122,10 @@ export default function App() {
         .order("updated_at", { ascending: false })
         .limit(1);
 
-      if (data) setContract(data[0].data);
+      // Merged for the same reason as the contract page: a seeded row's
+      // problemsToSolveByCategory is `{}`, which would leave the sidebar's
+      // per-category progress with no targets.
+      if (data?.[0]) setContract(mergeContract(BLANK_CONTRACT, data[0].data));
     })();
   }, [session])
 

@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from "react";
 import { ContractData } from "../../../types";
 import { Box, Button, Stack, Typography } from "@mui/joy";
+import { getContractCategories } from "../../../utils/contract";
 
 interface ContractTextProps {
   setIsUpdating: Dispatch<SetStateAction<boolean>>;
@@ -10,15 +11,12 @@ interface ContractTextProps {
 }
 
 export default function ContractText({ setIsUpdating, contract, lastUpdated, featureMap }: ContractTextProps) {
-  const baseCategories = ["Fundamentals", "Logic", "String-1", "List-1: Indexing"];
-  const allCategories = Object.keys(contract.Coding.problemsToSolveByCategory);
-
   // featureMap determines which stage of the contract to show. if you want to display only questions from coding stage 2
   // or mutation/haystack, add it in the corresponding featureMap in the JSX. make sure to do this for ContractEdit as well.
-  const categoriesToShow = featureMap["CodingStage2"]
-   ? allCategories
-   : baseCategories.filter((c) => allCategories.includes(c));
-   
+  // The categories come from the selected problem set (see getContractCategories),
+  // not from the contract's own keys, which can be empty on a fresh account.
+  const categoriesToShow = getContractCategories(!!featureMap["CodingStage2"]);
+
   return (
     <>
       <Stack sx={{ overflowY: "scroll"}} gap={2}>
@@ -28,7 +26,7 @@ export default function ContractText({ setIsUpdating, contract, lastUpdated, fea
         <Stack direction="row" flexWrap="wrap" columnGap={4} rowGap={2} justifyContent="center">
           {categoriesToShow.map((cat) => (
             <Typography key={cat}>
-              {cat}: <strong>{contract.Coding.problemsToSolveByCategory[cat]}</strong>
+              {cat}: <strong>{contract.Coding.problemsToSolveByCategory[cat] ?? 0}</strong>
             </Typography>
           ))}
           </Stack>

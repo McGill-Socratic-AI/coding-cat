@@ -7,6 +7,7 @@ import ContractText from "./ContractText";
 import { supabase } from "../../../supabaseClient";
 import { Session } from "@supabase/supabase-js";
 import { useOutletContext } from "react-router-dom";
+import { mergeContract } from "../../../utils/contract";
 
 export default function Contract() {
   const [open, setOpen] = useState(false);
@@ -45,7 +46,9 @@ export default function Contract() {
       if (error) {
         console.error(error);
       } else {
-        setContract(data.data as ContractData);
+        // Merged, not assigned: the seeded row's problemsToSolveByCategory is
+        // `{}`, so assigning it would leave the page with no categories.
+        setContract(mergeContract(BLANK_CONTRACT, data.data));
         setLastUpdated(new Date(data.updated_at));
       }
     })();
@@ -67,7 +70,7 @@ export default function Contract() {
       console.error(error);
     }
     else {
-      setContract(data.data as ContractData);
+      setContract(mergeContract(BLANK_CONTRACT, data.data));
       setLastUpdated(new Date(data.updated_at));
     }
   
